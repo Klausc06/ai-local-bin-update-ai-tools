@@ -12,6 +12,7 @@ MCP binaries.
 ```bash
 update-ai-tools --check
 update-ai-tools --dry-run
+update-ai-tools --menu
 update-ai-tools
 update-ai-tools --check --json
 update-ai-tools --version
@@ -23,6 +24,7 @@ update-ai-tools --version
   update configs.
 - `--dry-run`: inventory plus planned update commands. It does not back up or
   update configs.
+- `--menu`: opens an interactive terminal menu.
 - default: backs up known config files, runs safe update commands, then performs
   post-update checks.
 - `--json`: prints a machine-readable report for future WorkBuddy or frontend

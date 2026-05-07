@@ -26,6 +26,7 @@ var version = "0.1.0-dev"
 type options struct {
 	check   bool
 	dryRun  bool
+	menu    bool
 	version bool
 	jsonOut bool
 	verbose bool
@@ -37,13 +38,19 @@ type options struct {
 type stringSet map[string]bool
 
 func Run(args []string) error {
-	if len(args) == 0 && isTerminal() {
-		args = interactiveSelect()
-		fmt.Println()
-	}
 	opts, err := parseArgs(args)
 	if err != nil {
 		return err
+	}
+	if opts.menu {
+		if !isTerminal() {
+			return fmt.Errorf("--menu requires an interactive terminal")
+		}
+		menuArgs, err := interactiveSelect()
+		if err != nil {
+			return err
+		}
+		return Run(menuArgs)
 	}
 	if opts.version {
 		fmt.Fprintf(os.Stdout, "update-ai-tools %s\n", version)
@@ -153,6 +160,7 @@ func parseArgs(args []string) (options, error) {
 	opts := options{}
 	fs.BoolVar(&opts.check, "check", false, "inventory only; do not update or back up configs")
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "inventory and show planned update commands without backup or updates")
+	fs.BoolVar(&opts.menu, "menu", false, "show an interactive action menu")
 	fs.BoolVar(&opts.version, "version", false, "print version and exit")
 	fs.BoolVar(&opts.jsonOut, "json", false, "print machine-readable JSON report")
 	fs.BoolVar(&opts.verbose, "verbose", false, "print command details to terminal")
@@ -175,10 +183,11 @@ func parseArgs(args []string) (options, error) {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run] [--json] [--verbose] [--only names] [--skip names]\n\n" +
+	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run|--menu] [--json] [--verbose] [--only names] [--skip names]\n\n" +
 		"Examples:\n" +
 		"  update-ai-tools --check\n" +
 		"  update-ai-tools --dry-run\n" +
+		"  update-ai-tools --menu\n" +
 		"  update-ai-tools --version\n" +
 		"  update-ai-tools\n" +
 		"  update-ai-tools --check --json")
@@ -341,7 +350,7 @@ func isTerminal() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-func interactiveSelect() []string {
+func interactiveSelect() ([]string, error) {
 	fmt.Println()
 	fmt.Println("update-ai-tools")
 	fmt.Println()
@@ -355,17 +364,20 @@ func interactiveSelect() []string {
 	fmt.Print("Enter 1-5: ")
 
 	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
+	line, err := reader.ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		return nil, fmt.Errorf("read menu selection: %w", err)
+	}
 	switch strings.TrimSpace(line) {
 	case "2":
-		return []string{"--dry-run"}
+		return []string{"--dry-run"}, nil
 	case "3":
-		return []string{}
+		return []string{}, nil
 	case "4":
-		return []string{"--check", "--json"}
+		return []string{"--check", "--json"}, nil
 	case "5":
-		return []string{"--version"}
+		return []string{"--version"}, nil
 	default:
-		return []string{"--check"}
+		return []string{"--check"}, nil
 	}
 }

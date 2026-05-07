@@ -104,6 +104,16 @@ func TestParseArgsVersion(t *testing.T) {
 	}
 }
 
+func TestParseArgsMenu(t *testing.T) {
+	opts, err := parseArgs([]string{"--menu"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !opts.menu {
+		t.Fatal("expected menu=true")
+	}
+}
+
 func TestParseArgsJson(t *testing.T) {
 	opts, err := parseArgs([]string{"--json"})
 	if err != nil {
@@ -241,10 +251,12 @@ type stubProvider struct {
 	name string
 }
 
-func (s stubProvider) Name() string                                             { return s.name }
-func (s stubProvider) Inventory() ([]report.Item, []report.Risk, []report.TaskResult) { return nil, nil, nil }
-func (s stubProvider) UpdateTasks() []runner.Task                               { return nil }
-func (s stubProvider) PostUpdateChecks() []report.TaskResult                     { return nil }
+func (s stubProvider) Name() string { return s.name }
+func (s stubProvider) Inventory() ([]report.Item, []report.Risk, []report.TaskResult) {
+	return nil, nil, nil
+}
+func (s stubProvider) UpdateTasks() []runner.Task            { return nil }
+func (s stubProvider) PostUpdateChecks() []report.TaskResult { return nil }
 
 func providerNames(providers []provider.Provider) []string {
 	out := make([]string, len(providers))
@@ -323,5 +335,49 @@ func TestRunCheckAndDryRunExclusive(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("expected mutually exclusive error, got: %v", err)
+	}
+}
+
+func TestRunMenuRequiresTerminal(t *testing.T) {
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	defer func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	}()
+	_ = w.Close()
+
+	err = Run([]string{"--menu"})
+	if err == nil {
+		t.Fatal("expected --menu to require a terminal in tests")
+	}
+	if !strings.Contains(err.Error(), "interactive terminal") {
+		t.Errorf("expected terminal error, got: %v", err)
+	}
+}
+
+func TestInteractiveSelectReturnsErrorOnEOF(t *testing.T) {
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	defer func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	}()
+	_ = w.Close()
+
+	_, err = interactiveSelect()
+	if err == nil {
+		t.Fatal("expected EOF error")
+	}
+	if !strings.Contains(err.Error(), "read menu selection") {
+		t.Errorf("expected read menu selection error, got: %v", err)
 	}
 }
