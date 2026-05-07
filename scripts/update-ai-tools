@@ -4,8 +4,14 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
-if [[ -x "$repo_root/dist/update-ai-tools" ]]; then
-  exec "$repo_root/dist/update-ai-tools" "$@"
+bin=""
+for candidate in \
+  "$repo_root/dist/update-ai-tools" \
+  "$repo_root/dist/update-ai-tools-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"; do
+  if [[ -x "$candidate" ]]; then bin="$candidate"; break; fi
+done
+if [[ -n "$bin" ]]; then
+  exec "$bin" "$@"
 fi
 
 if command -v go >/dev/null 2>&1; then

@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"update-ai-tools/internal/platform"
+	"update-ai-tools/internal/report"
 )
 
 func TestScanConfigRisksDetectsSecrets(t *testing.T) {
@@ -243,5 +247,241 @@ func TestExists(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "exists.txt"), []byte("ok"), 0o600)
 	if !exists(filepath.Join(dir, "exists.txt")) {
 		t.Error("expected true for existing file")
+	}
+}
+
+func TestDirItem(t *testing.T) {
+	item := dirItem("test", "home", "/some/path")
+	if item.Provider != "test" || item.Name != "home" || item.Type != "directory" {
+		t.Errorf("unexpected item: %+v", item)
+	}
+	if item.Status != "missing" {
+		t.Errorf("expected missing status for nonexistent path, got %s", item.Status)
+	}
+	if item.Path != "/some/path" {
+		t.Errorf("expected /some/path, got %q", item.Path)
+	}
+}
+
+func TestCountFilesItem(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o600)
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0o600)
+
+	item := countFilesItem("test", "agents", dir, ".")
+	if item.Detail != "2 files" {
+		t.Errorf("expected '2 files', got %q", item.Detail)
+	}
+	if item.Status != "present" {
+		t.Errorf("expected present, got %s", item.Status)
+	}
+}
+
+func TestCountSkillItem(t *testing.T) {
+	dir := t.TempDir()
+	skillsDir := filepath.Join(dir, "skills")
+	os.MkdirAll(skillsDir, 0o700)
+	os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("# skill"), 0o600)
+	os.WriteFile(filepath.Join(skillsDir, "README.md"), []byte("readme"), 0o600)
+
+	item := countSkillItem("test", skillsDir)
+	if item.Type != "skills" {
+		t.Errorf("expected type skills, got %s", item.Type)
+	}
+	if item.Detail != "1 skills" {
+		t.Errorf("expected '1 skills', got %q", item.Detail)
+	}
+}
+
+func TestSkillsInventory(t *testing.T) {
+	home := t.TempDir()
+	profile := platform.Profile{
+		Home:          home,
+		CodexHome:     filepath.Join(home, ".codex"),
+		ClaudeHome:    filepath.Join(home, ".claude"),
+		AgentsHome:    filepath.Join(home, ".agents"),
+		WorkBuddyHome: filepath.Join(home, ".workbuddy"),
+	}
+	for _, dir := range []string{
+		filepath.Join(profile.CodexHome, "skills"),
+		filepath.Join(profile.ClaudeHome, "skills"),
+		filepath.Join(profile.AgentsHome, "skills"),
+		filepath.Join(profile.WorkBuddyHome, "skills"),
+	} {
+		os.MkdirAll(dir, 0o700)
+	}
+
+	p := baseProvider{name: "skills", profile: profile}
+	items, risks, results := p.Inventory()
+
+	if len(items) != 4 {
+		t.Fatalf("expected 4 inventory items, got %d", len(items))
+	}
+	if risks != nil {
+		t.Fatalf("expected no risks, got %d", len(risks))
+	}
+	if results != nil {
+		t.Fatalf("expected no results, got %d", len(results))
+	}
+}
+
+func TestWorkbuddyInventoryRisks(t *testing.T) {
+	home := t.TempDir()
+	profile := platform.Profile{
+		Home:          home,
+		WorkBuddyHome: filepath.Join(home, ".workbuddy"),
+	}
+	marketplace := filepath.Join(profile.WorkBuddyHome, "skills-marketplace")
+	os.MkdirAll(marketplace, 0o700)
+
+	p := baseProvider{name: "workbuddy", profile: profile}
+	_, risks, _ := p.Inventory()
+
+	found := false
+	for _, r := range risks {
+		if r.Name == "skills-marketplace" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected marketplace risk")
+	}
+}
+
+// stubRunner implements TaskRunner for inventory tests.
+type stubRunner struct {
+	results map[string]report.TaskResult
+}
+
+func (r *stubRunner) Capture(provider, name string, timeout time.Duration, command ...string) report.TaskResult {
+	if res, ok := r.results[name]; ok {
+		return res
+	}
+	return report.TaskResult{Name: name, Provider: provider, Status: report.StatusSuccess}
+}
+
+func TestCodexInventory(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	os.MkdirAll(filepath.Join(codexHome, "agents"), 0o700)
+	skillsDir := filepath.Join(codexHome, "skills")
+	os.MkdirAll(skillsDir, 0o700)
+	os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("skill"), 0o600)
+
+	stub := &stubRunner{
+		results: map[string]report.TaskResult{
+			"codex-version":  {Name: "codex-version", Status: report.StatusSuccess, Output: "0.128.0"},
+			"codex-mcp-list": {Name: "codex-mcp-list", Status: report.StatusSuccess, Output: "no risks"},
+		},
+	}
+	p := baseProvider{name: "codex", profile: platform.Profile{Home: home, CodexHome: codexHome}, runner: stub}
+
+	items, risks, results := p.Inventory()
+
+	if len(items) < 3 {
+		t.Fatalf("expected at least 3 items, got %d", len(items))
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if len(risks) > 0 {
+		t.Errorf("expected no risks for clean mcp output, got %d", len(risks))
+	}
+	types := map[string]bool{}
+	for _, item := range items {
+		types[item.Type] = true
+	}
+	if !types["directory"] || !types["skills"] {
+		t.Errorf("expected directory and skills item types, got %v", types)
+	}
+}
+
+func TestCodexInventoryDetectsRisks(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	os.MkdirAll(codexHome, 0o700)
+
+	stub := &stubRunner{
+		results: map[string]report.TaskResult{
+			"codex-version":  {Name: "codex-version", Status: report.StatusSuccess, Output: "0.128.0"},
+			"codex-mcp-list": {Name: "codex-mcp-list", Status: report.StatusSuccess, Output: "xiaohongshu connected; token in config"},
+		},
+	}
+	p := baseProvider{name: "codex", profile: platform.Profile{Home: home, CodexHome: codexHome}, runner: stub}
+
+	_, risks, _ := p.Inventory()
+
+	names := map[string]bool{}
+	for _, r := range risks {
+		names[r.Name] = true
+	}
+	if !names["xiaohongshu"] {
+		t.Error("expected xiaohongshu risk")
+	}
+	if !names["mcp-output"] {
+		t.Error("expected sensitive risk")
+	}
+}
+
+func TestClaudeInventory(t *testing.T) {
+	home := t.TempDir()
+	claudeHome := filepath.Join(home, ".claude")
+	os.MkdirAll(filepath.Join(claudeHome, "agents"), 0o700)
+	skillsDir := filepath.Join(claudeHome, "skills")
+	os.MkdirAll(skillsDir, 0o700)
+	os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte("skill"), 0o600)
+	pluginsDir := filepath.Join(claudeHome, "plugins")
+	os.MkdirAll(pluginsDir, 0o700)
+	os.WriteFile(filepath.Join(pluginsDir, "installed_plugins.json"), []byte(`{"plugins":["a","b","c"]}`), 0o600)
+
+	stub := &stubRunner{
+		results: map[string]report.TaskResult{
+			"claude-version":  {Name: "claude-version", Status: report.StatusSuccess, Output: "2.0.0"},
+			"claude-mcp-list": {Name: "claude-mcp-list", Status: report.StatusSuccess, Output: "clean"},
+		},
+	}
+	p := baseProvider{name: "claude", profile: platform.Profile{Home: home, ClaudeHome: claudeHome}, runner: stub}
+
+	items, _, results := p.Inventory()
+
+	if len(items) < 4 {
+		t.Fatalf("expected at least 4 items (home, agents, skills, plugins), got %d", len(items))
+	}
+	hasPlugins := false
+	for _, item := range items {
+		if item.Type == "json" && item.Detail == "1 entries" {
+			hasPlugins = true
+		}
+	}
+	if !hasPlugins {
+		t.Error("expected plugins item with entry count")
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+}
+
+func TestOmxInventory(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	os.MkdirAll(filepath.Join(codexHome, "agents"), 0o700)
+	os.MkdirAll(filepath.Join(codexHome, "skills"), 0o700)
+
+	stub := &stubRunner{
+		results: map[string]report.TaskResult{
+			"omx-version": {Name: "omx-version", Status: report.StatusSuccess, Output: "1.5.0"},
+			"omx-doctor":  {Name: "omx-doctor", Status: report.StatusSuccess, Output: "all ok"},
+		},
+	}
+	p := baseProvider{name: "omx", profile: platform.Profile{Home: home, CodexHome: codexHome}, runner: stub}
+
+	items, _, results := p.Inventory()
+
+	if len(items) < 2 {
+		t.Fatalf("expected at least 2 items, got %d", len(items))
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
 	}
 }

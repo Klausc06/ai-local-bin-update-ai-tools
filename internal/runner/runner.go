@@ -129,8 +129,7 @@ func firstSignificantLine(s, fallback string) string {
 }
 
 func looksLikeHealthWarning(s string) bool {
-	lower := strings.ToLower(s)
-	return strings.Contains(lower, "failed to connect") || strings.Contains(lower, "✗")
+	return strings.Contains(strings.ToLower(s), "failed to connect")
 }
 
 func shouldTryFallback(s string) bool {

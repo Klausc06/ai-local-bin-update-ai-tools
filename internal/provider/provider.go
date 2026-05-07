@@ -21,13 +21,17 @@ type Provider interface {
 	PostUpdateChecks() []report.TaskResult
 }
 
+type TaskRunner interface {
+	Capture(provider, name string, timeout time.Duration, command ...string) report.TaskResult
+}
+
 type baseProvider struct {
 	name    string
 	profile platform.Profile
-	runner  *runner.Runner
+	runner  TaskRunner
 }
 
-func DefaultRegistry(profile platform.Profile, r *runner.Runner) []Provider {
+func DefaultRegistry(profile platform.Profile, r TaskRunner) []Provider {
 	return []Provider{
 		baseProvider{name: "codex", profile: profile, runner: r},
 		baseProvider{name: "claude", profile: profile, runner: r},
@@ -159,7 +163,10 @@ func (p baseProvider) mcpInventory() ([]report.Item, []report.Risk, []report.Tas
 		items = append(items, classifyMCPInFile(p.name, path)...)
 	}
 	for _, dir := range p.profile.LaunchDirs {
-		matches, _ := filepath.Glob(filepath.Join(dir, "*[Mm][Cc][Pp]*"))
+		matches, err := filepath.Glob(filepath.Join(dir, "*[Mm][Cc][Pp]*"))
+		if err != nil {
+			continue
+		}
 		for _, path := range matches {
 			items = append(items, report.Item{Provider: p.name, Name: filepath.Base(path), Type: "launch-service", Status: "present", Path: path})
 			risks = append(risks, report.Risk{Provider: p.name, Name: filepath.Base(path), Level: "manual", Path: path, Reason: "LaunchAgent/service is reported but not modified"})

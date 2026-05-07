@@ -47,6 +47,9 @@ func Run(args []string) error {
 
 	started := time.Now()
 	profile := platform.Detect(opts.home)
+	if profile.Home == "" {
+		return fmt.Errorf("cannot determine home directory; set --home")
+	}
 	red := redactor.New()
 	logPath := logPath(profile.Home, started)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
@@ -167,15 +170,13 @@ func parseArgs(args []string) (options, error) {
 }
 
 func usageError() error {
-	return fmt.Errorf(`Usage: update-ai-tools [--check|--dry-run] [--json] [--verbose] [--only names] [--skip names]
-
-Examples:
-  update-ai-tools --check
-  update-ai-tools --dry-run
-  update-ai-tools --version
-  update-ai-tools
-  update-ai-tools --check --json
-`)
+	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run] [--json] [--verbose] [--only names] [--skip names]\n\n" +
+		"Examples:\n" +
+		"  update-ai-tools --check\n" +
+		"  update-ai-tools --dry-run\n" +
+		"  update-ai-tools --version\n" +
+		"  update-ai-tools\n" +
+		"  update-ai-tools --check --json")
 }
 
 func parseSet(raw string) stringSet {
@@ -269,6 +270,7 @@ func warningResults(results []report.TaskResult) []report.TaskResult {
 func writeJSONReport(w io.Writer, rep report.Report, red redactor.Redactor) {
 	data, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "update-ai-tools: failed to marshal JSON report: %v\n", err)
 		return
 	}
 	_, _ = w.Write([]byte("\nJSON report\n"))

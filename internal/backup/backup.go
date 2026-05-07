@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"update-ai-tools/internal/platform"
@@ -41,7 +42,11 @@ func Configs(profile platform.Profile, red redactor.Redactor, log *report.Logger
 	res.Duration = time.Since(start)
 	if firstErr != nil {
 		res.Status = report.StatusWarning
-		res.Summary = fmt.Sprintf("backed up %d configs; some failed", copied)
+		if copied == 0 {
+			res.Summary = "failed to back up any configs"
+		} else {
+			res.Summary = fmt.Sprintf("backed up %d configs; some failed", copied)
+		}
 		res.Error = firstErr.Error()
 		return dest, res
 	}
@@ -55,6 +60,9 @@ func safeName(path string) string {
 	vol := filepath.VolumeName(clean)
 	clean = clean[len(vol):]
 	out := ""
+	if vol != "" {
+		out = strings.ReplaceAll(vol, ":", "__")
+	}
 	for _, r := range clean {
 		switch r {
 		case '/', '\\', ':':

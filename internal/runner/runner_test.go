@@ -18,9 +18,29 @@ func TestFirstSignificantLineSkipsWarnings(t *testing.T) {
 	}
 }
 
+func TestFirstSignificantLineEmpty(t *testing.T) {
+	got := firstSignificantLine("", "fallback")
+	if got != "fallback" {
+		t.Fatalf("expected fallback for empty, got %q", got)
+	}
+}
+
+func TestFirstSignificantLineAllWarnings(t *testing.T) {
+	got := firstSignificantLine("WARNING: a\nWARNING: b", "fallback")
+	if got != "fallback" {
+		t.Fatalf("expected fallback when all lines are warnings, got %q", got)
+	}
+}
+
 func TestLooksLikeHealthWarning(t *testing.T) {
 	if !looksLikeHealthWarning("plugin:playwright - ✗ Failed to connect") {
 		t.Fatal("expected health warning")
+	}
+	if looksLikeHealthWarning("all systems operational ✓") {
+		t.Fatal("normal output should not be a health warning")
+	}
+	if looksLikeHealthWarning("connection established successfully") {
+		t.Fatal("success message should not be a health warning")
 	}
 }
 

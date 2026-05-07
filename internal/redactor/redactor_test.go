@@ -27,3 +27,24 @@ func TestRedactsFieldsAndPhone(t *testing.T) {
 		}
 	}
 }
+
+func TestRedactsBearerToken(t *testing.T) {
+	red := New()
+	out := red.Redact("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.dGhpcyBpcyBhIHRlc3Q")
+	if strings.Contains(out, "eyJhbGci") {
+		t.Fatalf("Bearer token leaked: %s", out)
+	}
+	if !strings.Contains(out, "*****") {
+		t.Fatalf("expected redacted output, got: %s", out)
+	}
+}
+
+func TestRedactsEnvFileFormat(t *testing.T) {
+	red := New()
+	out := red.Redact("GITHUB_TOKEN=ghp_abc123def456\nOPENAI_API_KEY=sk-xyz789")
+	for _, leaked := range []string{"ghp_abc123def456", "sk-xyz789"} {
+		if strings.Contains(out, leaked) {
+			t.Fatalf("env value leaked: %s", out)
+		}
+	}
+}

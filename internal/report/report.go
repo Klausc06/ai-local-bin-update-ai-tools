@@ -91,7 +91,9 @@ func (l *Logger) Detailf(format string, args ...any) {
 
 func (l *Logger) write(level, msg string, toConsole bool) {
 	line := l.red.Redact(fmt.Sprintf("%s %s %s\n", time.Now().Format(time.RFC3339), level, msg))
-	_, _ = l.file.Write([]byte(line))
+	if _, err := l.file.Write([]byte(line)); err != nil {
+		fmt.Fprintf(l.console, "WARNING: log write failed: %v\n", err)
+	}
 	if toConsole {
 		_, _ = l.console.Write([]byte(strings.TrimRight(line, "\n") + "\n"))
 	}
