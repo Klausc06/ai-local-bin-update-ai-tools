@@ -4,8 +4,18 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..")
 $Binary = Join-Path $RepoRoot "dist/update-ai-tools.exe"
 
-if (Test-Path $Binary) {
-    & $Binary @args
+$FoundBin = $null
+foreach ($Candidate in @(
+    $Binary,
+    (Join-Path $RepoRoot "dist/update-ai-tools-windows-amd64.exe")
+)) {
+    if (Test-Path $Candidate) {
+        $FoundBin = $Candidate
+        break
+    }
+}
+if ($FoundBin) {
+    & $FoundBin @args
     exit $LASTEXITCODE
 }
 
