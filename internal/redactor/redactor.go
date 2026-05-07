@@ -11,6 +11,7 @@ type Redactor struct {
 	urlExtractRe *regexp.Regexp
 	bearerRe     *regexp.Regexp
 	urlParamRe   *regexp.Regexp
+	ansiRe       *regexp.Regexp
 }
 
 func New() Redactor {
@@ -27,6 +28,7 @@ func New() Redactor {
 		urlExtractRe: regexp.MustCompile(`https?://[^\s"'<>]+`),
 		bearerRe:     regexp.MustCompile(`(?i)(Bearer\s+).*`),
 		urlParamRe:   regexp.MustCompile(`=([^&\s]+)`),
+		ansiRe:       regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`),
 	}
 }
 
@@ -34,7 +36,7 @@ func (r Redactor) Redact(s string) string {
 	if s == "" {
 		return s
 	}
-	out := s
+	out := r.ansiRe.ReplaceAllString(s, "")
 	out = r.redactURLs(out)
 	for _, p := range r.patterns {
 		out = p.ReplaceAllStringFunc(out, func(match string) string {

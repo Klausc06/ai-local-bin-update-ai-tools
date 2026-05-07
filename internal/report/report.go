@@ -122,7 +122,7 @@ func DeduplicateRisks(risks []Risk) []Risk {
 	seen := map[string]bool{}
 	out := make([]Risk, 0, len(risks))
 	for _, risk := range risks {
-		key := risk.Provider + "\x00" + risk.Name + "\x00" + risk.Level + "\x00" + risk.Reason + "\x00" + risk.Path
+		key := risk.Name + "\x00" + risk.Level + "\x00" + risk.Reason + "\x00" + risk.Path
 		if seen[key] {
 			continue
 		}
