@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"update-ai-tools/internal/provider"
 	"update-ai-tools/internal/redactor"
@@ -48,6 +49,27 @@ func TestModeName(t *testing.T) {
 		if got != c.want {
 			t.Errorf("modeName(%v,%v) = %q, want %q", c.check, c.dryRun, got, c.want)
 		}
+	}
+}
+
+func TestCreateLogFileUsesSuffixOnCollision(t *testing.T) {
+	home := t.TempDir()
+	now := time.Date(2026, 5, 7, 12, 34, 56, 0, time.UTC)
+	firstPath, firstFile, err := createLogFile(home, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer firstFile.Close()
+	secondPath, secondFile, err := createLogFile(home, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondFile.Close()
+	if firstPath == secondPath {
+		t.Fatalf("expected unique log paths, both were %q", firstPath)
+	}
+	if !strings.HasSuffix(secondPath, "-01.log") {
+		t.Fatalf("expected suffixed log path, got %q", secondPath)
 	}
 }
 
@@ -243,6 +265,25 @@ func TestWriteJSONReport(t *testing.T) {
 	}
 	if !strings.Contains(out, `"mode"`) {
 		t.Error("expected JSON content with mode field")
+	}
+}
+
+func TestPrintHumanShowsRisksWithoutResults(t *testing.T) {
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:    "check",
+		LogPath: "/tmp/test.log",
+		Risks: []report.Risk{
+			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
+		},
+	}
+	printHuman(&buf, rep, redactor.New())
+	out := buf.String()
+	if !strings.Contains(out, "1 risk(s)") {
+		t.Fatalf("expected risk section, got: %s", out)
+	}
+	if !strings.Contains(out, "spotify") {
+		t.Fatalf("expected risk name in output, got: %s", out)
 	}
 }
 

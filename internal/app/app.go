@@ -63,11 +63,7 @@ func Run(args []string) error {
 		return fmt.Errorf("cannot determine home directory; set --home")
 	}
 	red := redactor.New()
-	logPath := logPath(profile.Home, started)
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
-		return fmt.Errorf("create log directory: %w", err)
-	}
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	logPath, logFile, err := createLogFile(profile.Home, started)
 	if err != nil {
 		return fmt.Errorf("create log file: %w", err)
 	}
@@ -223,6 +219,30 @@ func logPath(home string, t time.Time) string {
 	return filepath.Join(home, ".codex", "log", "update-ai-tools", t.Format("20060102-150405")+".log")
 }
 
+func createLogFile(home string, t time.Time) (string, *os.File, error) {
+	base := logPath(home, t)
+	if err := os.MkdirAll(filepath.Dir(base), 0o700); err != nil {
+		return base, nil, err
+	}
+	candidates := []string{base}
+	ext := filepath.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	for i := 1; i <= 99; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s-%02d%s", stem, i, ext))
+	}
+	for _, candidate := range candidates {
+		f, err := os.OpenFile(candidate, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			return candidate, f, nil
+		}
+		if os.IsExist(err) {
+			continue
+		}
+		return candidate, nil, err
+	}
+	return base, nil, fmt.Errorf("all log filenames already exist for %s", filepath.Base(base))
+}
+
 func modeName(check, dryRun bool) string {
 	if check {
 		return "check"
@@ -247,10 +267,6 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
 	}
 	fmt.Fprintln(w)
 
-	if len(rep.Results) == 0 {
-		return
-	}
-
 	// Calculate column widths.
 	nameW := 12
 	for _, r := range rep.Results {
@@ -262,28 +278,30 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
 		nameW = 28
 	}
 
-	fmt.Fprintln(w)
-	nameHdr := "NAME" + strings.Repeat(" ", nameW-4)
-	fmt.Fprintf(w, "  %s  STATUS    SUMMARY\n", nameHdr)
+	if len(rep.Results) > 0 {
+		fmt.Fprintln(w)
+		nameHdr := "NAME" + strings.Repeat(" ", nameW-4)
+		fmt.Fprintf(w, "  %s  STATUS    SUMMARY\n", nameHdr)
 
-	sort.Slice(rep.Results, func(i, j int) bool {
-		if rep.Results[i].Provider != rep.Results[j].Provider {
-			return rep.Results[i].Provider < rep.Results[j].Provider
-		}
-		return rep.Results[i].Name < rep.Results[j].Name
-	})
+		sort.Slice(rep.Results, func(i, j int) bool {
+			if rep.Results[i].Provider != rep.Results[j].Provider {
+				return rep.Results[i].Provider < rep.Results[j].Provider
+			}
+			return rep.Results[i].Name < rep.Results[j].Name
+		})
 
-	for _, r := range rep.Results {
-		name := r.Name
-		if len(name) > nameW {
-			name = name[:nameW-1] + "…"
+		for _, r := range rep.Results {
+			name := r.Name
+			if len(name) > nameW {
+				name = name[:nameW-1] + "…"
+			}
+			summary := strings.TrimRight(r.Summary, "\n")
+			if len(summary) > 60 {
+				summary = summary[:57] + "..."
+			}
+			line := fmt.Sprintf("  %-*s  %-8s  %s", nameW, name, r.Status, summary)
+			fmt.Fprintln(w, red.Redact(line))
 		}
-		summary := strings.TrimRight(r.Summary, "\n")
-		if len(summary) > 60 {
-			summary = summary[:57] + "..."
-		}
-		line := fmt.Sprintf("  %-*s  %-8s  %s", nameW, name, r.Status, summary)
-		fmt.Fprintln(w, red.Redact(line))
 	}
 
 	warnings := warningResults(rep.Results)
