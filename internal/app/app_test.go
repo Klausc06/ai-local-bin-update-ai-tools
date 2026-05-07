@@ -87,6 +87,10 @@ func TestParseArgsDefaults(t *testing.T) {
 }
 
 func TestDefaultArgsUsesMenu(t *testing.T) {
+	orig := isTerminal
+	isTerminal = func() bool { return true }
+	defer func() { isTerminal = orig }()
+
 	got := defaultArgs(nil)
 	if len(got) != 1 || got[0] != "--menu" {
 		t.Fatalf("expected no-arg default to --menu, got %v", got)
@@ -478,5 +482,56 @@ func TestInteractiveSelectReturnsErrorOnEOF(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read menu selection") {
 		t.Errorf("expected read menu selection error, got: %v", err)
+	}
+}
+
+func TestDefaultArgsFallsBackToCheckWhenNoTTY(t *testing.T) {
+	orig := isTerminal
+	isTerminal = func() bool { return false }
+	defer func() { isTerminal = orig }()
+
+	args := defaultArgs([]string{})
+	if len(args) != 1 || args[0] != "--check" {
+		t.Errorf("expected [--check], got %v", args)
+	}
+}
+
+func TestDefaultArgsUsesMenuWhenTTY(t *testing.T) {
+	orig := isTerminal
+	isTerminal = func() bool { return true }
+	defer func() { isTerminal = orig }()
+
+	args := defaultArgs([]string{})
+	if len(args) != 1 || args[0] != "--menu" {
+		t.Errorf("expected [--menu], got %v", args)
+	}
+}
+
+func TestDefaultArgsPreservesExplicitArgs(t *testing.T) {
+	// should not depend on terminal state when args are explicit
+	orig := isTerminal
+	isTerminal = func() bool { return false }
+	defer func() { isTerminal = orig }()
+
+	args := defaultArgs([]string{"--check", "--json"})
+	if len(args) != 2 || args[0] != "--check" || args[1] != "--json" {
+		t.Errorf("expected [--check --json], got %v", args)
+	}
+}
+
+func TestRunExplicitMenuErrorsWithoutTTY(t *testing.T) {
+	orig := isTerminal
+	isTerminal = func() bool { return false }
+	defer func() { isTerminal = orig }()
+
+	err := Run([]string{"--menu"})
+	if err == nil {
+		t.Fatal("expected --menu to fail without a terminal")
+	}
+	if !strings.Contains(err.Error(), "interactive terminal") {
+		t.Errorf("expected interactive terminal error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "--check") {
+		t.Errorf("expected suggestion to use --check, got: %v", err)
 	}
 }

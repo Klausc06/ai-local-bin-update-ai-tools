@@ -46,7 +46,7 @@ func Run(args []string) error {
 	}
 	if opts.menu {
 		if !isTerminal() {
-			return fmt.Errorf("--menu requires an interactive terminal")
+			return fmt.Errorf("--menu requires an interactive terminal; use --check or --json for non-interactive environments")
 		}
 		menuArgs, err := interactiveSelect()
 		if err != nil {
@@ -194,7 +194,10 @@ func usageError() error {
 
 func defaultArgs(args []string) []string {
 	if len(args) == 0 {
-		return []string{"--menu"}
+		if isTerminal() {
+			return []string{"--menu"}
+		}
+		return []string{"--check"}
 	}
 	return args
 }
@@ -429,12 +432,19 @@ func writeJSONReport(w io.Writer, rep report.Report, red redactor.Redactor) {
 	_, _ = w.Write([]byte("\n"))
 }
 
-func isTerminal() bool {
+var isTerminal = func() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
 		return false
 	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		return false
+	}
+	fo, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (fo.Mode() & os.ModeCharDevice) != 0
 }
 
 func interactiveSelect() ([]string, error) {
