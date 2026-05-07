@@ -20,7 +20,7 @@ import (
 	"update-ai-tools/internal/runner"
 )
 
-const version = "0.1.0"
+var version = "0.1.0-dev"
 
 type options struct {
 	check   bool

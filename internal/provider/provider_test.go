@@ -485,3 +485,79 @@ func TestOmxInventory(t *testing.T) {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
 }
+
+func TestMcpInventory(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	os.MkdirAll(codexHome, 0o700)
+	configFile := filepath.Join(codexHome, "config.toml")
+	os.WriteFile(configFile, []byte("[mcp_servers]\nurl = \"https://mcp.example.com/sse\"\ncommand = \"npx\"\ntoken = \"sk-abc123\"\n"), 0o600)
+
+	launchDir := filepath.Join(home, "Library", "LaunchAgents")
+	os.MkdirAll(launchDir, 0o700)
+	os.WriteFile(filepath.Join(launchDir, "com.user.mcp-server.plist"), []byte("plist"), 0o600)
+
+	profile := platform.Profile{
+		Home:        home,
+		CodexHome:   codexHome,
+		ConfigFiles: []string{configFile},
+		LaunchDirs:  []string{launchDir},
+	}
+	p := baseProvider{name: "mcp", profile: profile}
+
+	items, risks, results := p.Inventory()
+
+	if results != nil {
+		t.Fatalf("mcp inventory should have no task results, got %d", len(results))
+	}
+
+	hasConfig := false
+	hasLaunch := false
+	for _, item := range items {
+		if item.Type == "config" {
+			hasConfig = true
+		}
+		if item.Type == "launch-service" {
+			hasLaunch = true
+		}
+	}
+	if !hasConfig {
+		t.Error("expected config item")
+	}
+	if !hasLaunch {
+		t.Error("expected launch-service item")
+	}
+
+	hasSecret := false
+	for _, risk := range risks {
+		if risk.Level == "sensitive" {
+			hasSecret = true
+		}
+	}
+	if !hasSecret {
+		t.Error("expected sensitive risk for config containing token/secret")
+	}
+}
+
+func TestMcpInventorySkipsMissingConfigs(t *testing.T) {
+	home := t.TempDir()
+	profile := platform.Profile{
+		Home:        home,
+		CodexHome:   filepath.Join(home, ".codex"),
+		ConfigFiles: []string{filepath.Join(home, ".codex", "nonexistent.json")},
+		LaunchDirs:  []string{},
+	}
+	p := baseProvider{name: "mcp", profile: profile}
+
+	items, risks, results := p.Inventory()
+
+	if len(items) != 0 {
+		t.Errorf("expected no items for missing configs, got %d", len(items))
+	}
+	if len(risks) != 0 {
+		t.Errorf("expected no risks, got %d", len(risks))
+	}
+	if results != nil {
+		t.Errorf("expected nil results, got %d", len(results))
+	}
+}

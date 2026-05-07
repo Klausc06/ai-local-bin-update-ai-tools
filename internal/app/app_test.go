@@ -2,6 +2,10 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -256,4 +260,68 @@ func resultNames(results []report.TaskResult) []string {
 		out[i] = r.Name
 	}
 	return out
+}
+
+func captureStdout(fn func() error) (string, error) {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	err := fn()
+	w.Close()
+	os.Stdout = old
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String(), nil
+}
+
+func TestRunVersion(t *testing.T) {
+	out, err := captureStdout(func() error { return Run([]string{"--version"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "update-ai-tools") {
+		t.Errorf("expected version in output, got %q", out)
+	}
+}
+
+func TestRunCheckJson(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(home, ".codex")
+	claudeHome := filepath.Join(home, ".claude")
+	os.MkdirAll(filepath.Join(codexHome, "skills"), 0o700)
+	os.MkdirAll(filepath.Join(claudeHome, "skills"), 0o700)
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--check", "--json", "--only", "skills"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rep report.Report
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", err, out)
+	}
+	if rep.Mode != "check" {
+		t.Errorf("expected mode check, got %q", rep.Mode)
+	}
+	if rep.Home != home {
+		t.Errorf("expected home %q in report, got %q", home, rep.Home)
+	}
+	if len(rep.Inventory) == 0 {
+		t.Error("expected non-empty inventory")
+	}
+}
+
+func TestRunCheckAndDryRunExclusive(t *testing.T) {
+	err := Run([]string{"--check", "--dry-run"})
+	if err == nil {
+		t.Fatal("expected error for --check --dry-run together")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive error, got: %v", err)
+	}
 }
