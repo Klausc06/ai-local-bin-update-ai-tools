@@ -277,24 +277,39 @@ func modeName(check, dryRun bool) string {
 }
 
 func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
-	fmt.Fprintf(w, "\nupdate-ai-tools  %s complete\n", rep.Mode)
-	fmt.Fprintf(w, "\nSummary\n")
-	fmt.Fprintf(w, "  Success %d  Failed %d  Skipped %d",
-		rep.Summary.Success, rep.Summary.Failed, rep.Summary.Skipped)
-	if rep.Summary.Warning > 0 || rep.Summary.Info > 0 {
-		fmt.Fprintf(w, "  Warning %d", rep.Summary.Warning)
+	c := detectColors(w)
+
+	fmt.Fprintln(w)
+	c.header("  update-ai-tools  %s", rep.Mode)
+	if rep.Mode == "dry-run" {
+		fmt.Fprint(w, "  (no changes made)")
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  Log     %s\n", red.Redact(rep.LogPath))
+
+	// ── results bar ────────────────────────────────────────────
+	fmt.Fprintf(w, "  %s %d  %s %d  %s %d",
+		c.ok("✓"), rep.Summary.Success,
+		c.fail("✗"), rep.Summary.Failed,
+		c.skip("●"), rep.Summary.Skipped)
+	if rep.Summary.Warning > 0 {
+		fmt.Fprintf(w, "  %s %d", c.warn("!"), rep.Summary.Warning)
+	}
+	// log path — dim, single line
+	shortLog := rep.LogPath
+	if home, _ := os.UserHomeDir(); home != "" {
+		shortLog = strings.Replace(shortLog, home, "~", 1)
+	}
+	fmt.Fprintf(w, "\n  %s", c.dim(red.Redact(shortLog)))
 	if rep.BackupDir != "" {
-		fmt.Fprintf(w, "  Backup  %s\n", red.Redact(rep.BackupDir))
+		fmt.Fprintf(w, "\n  %s", c.dim(red.Redact(strings.Replace(rep.BackupDir, os.Getenv("HOME"), "~", 1))))
 	}
 
 	actions, checks, support := splitResults(rep.Results)
-	printResultSection(w, "Actions", actions, red)
-	printAttentionSection(w, warningResults(rep.Results), report.DeduplicateRisks(rep.Risks), red)
-	printResultSection(w, "Checks", checks, red)
-	printResultSection(w, "Details", support, red)
+	printResultSection(w, "Checks", checks, red, c)
+	printResultSection(w, "Actions", actions, red, c)
+	printRisksSection(w, rep.Risks, red, c)
+	printWarningsSection(w, warningResults(rep.Results), red, c)
+	printResultSection(w, "Details", support, red, c)
 	fmt.Fprintln(w)
 }
 
@@ -330,71 +345,160 @@ func sortResults(results []report.TaskResult) {
 	})
 }
 
-func printResultSection(w io.Writer, title string, results []report.TaskResult, red redactor.Redactor) {
+func printResultSection(w io.Writer, title string, results []report.TaskResult, red redactor.Redactor, c colors) {
 	if len(results) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "\n%s\n", title)
+	fmt.Fprintln(w)
+	c.section("  %s", title)
 	for _, result := range results {
-		status := statusMarker(result.Status)
-		summary := trimSummary(result.Summary, 72)
-		line := fmt.Sprintf("  %s %-26s %s", status, result.Name, summary)
+		marker, colorFn := statusGlyph(result.Status, c)
+		summary := strings.TrimSpace(result.Summary)
+		fmt.Fprintf(w, "\n    %s  %-26s  %s", colorFn(marker), result.Name, red.Redact(summary))
 		if result.Status == report.StatusFailed && result.Error != "" {
-			line += " (" + result.Error + ")"
+			fmt.Fprintf(w, "  (%s)", result.Error)
 		}
-		fmt.Fprintln(w, red.Redact(line))
 	}
+	fmt.Fprintln(w)
 }
 
-func printAttentionSection(w io.Writer, warnings []report.TaskResult, risks []report.Risk, red redactor.Redactor) {
-	if len(warnings) == 0 && len(risks) == 0 {
+func printWarningsSection(w io.Writer, warnings []report.TaskResult, red redactor.Redactor, c colors) {
+	if len(warnings) == 0 {
 		return
 	}
-	fmt.Fprintln(w, "\nNeeds Attention")
-	for _, warning := range warnings {
-		fmt.Fprintf(w, "  ! %-26s %s\n", warning.Name, red.Redact(trimSummary(warning.Summary, 72)))
+	fmt.Fprintln(w)
+	c.section("  Warnings")
+	for _, wr := range warnings {
+		fmt.Fprintf(w, "\n    %s  %-26s  %s", c.warn("!"), wr.Name, red.Redact(strings.TrimSpace(wr.Summary)))
 	}
-	if len(risks) > 0 {
-		sort.Slice(risks, func(i, j int) bool {
-			if risks[i].Level != risks[j].Level {
-				return risks[i].Level < risks[j].Level
-			}
-			return risks[i].Reason < risks[j].Reason
-		})
-		for _, risk := range risks {
-			detail := risk.Name
-			if risk.Path != "" {
-				detail = risk.Path
-			}
-			fmt.Fprintf(w, "  ! %-8s %-24s - %s\n", risk.Level, red.Redact(shortPath(detail)), risk.Reason)
+	fmt.Fprintln(w)
+}
+
+func printRisksSection(w io.Writer, risks []report.Risk, red redactor.Redactor, c colors) {
+	risks = report.DeduplicateRisks(risks)
+	if len(risks) == 0 {
+		return
+	}
+
+	// split: actionable risks vs. informational (manual/sensitive are just FYI)
+	var action, info []report.Risk
+	for _, r := range risks {
+		if r.Level == "manual" || r.Level == "sensitive" {
+			info = append(info, r)
+		} else {
+			action = append(action, r)
 		}
 	}
+
+	printRiskGroup(w, action, "Risks", c)
+	printRiskGroup(w, info, "Advisory", c)
 }
 
-func statusMarker(status report.Status) string {
+func printRiskGroup(w io.Writer, risks []report.Risk, title string, c colors) {
+	if len(risks) == 0 {
+		return
+	}
+	// sort by level then reason
+	sort.Slice(risks, func(i, j int) bool {
+		if risks[i].Level != risks[j].Level {
+			return risks[i].Level < risks[j].Level
+		}
+		return risks[i].Reason < risks[j].Reason
+	})
+
+	fmt.Fprintln(w)
+	c.section("  %s", title)
+	for _, r := range risks {
+		// show path (prettified) as the key detail
+		detail := shortPath(r.Path)
+		if detail == "" {
+			detail = r.Name
+		}
+		levelFn := levelColor(r.Level, c)
+		fmt.Fprintf(w, "\n    %s  %-42s  %s", levelFn(r.Level), detail, r.Reason)
+	}
+	fmt.Fprintln(w)
+}
+
+// ── color support ─────────────────────────────────────────────
+
+type colors struct {
+	ok, fail, skip, warn, dim func(string) string
+	header, section           fmtFunc
+}
+
+type fmtFunc func(string, ...interface{}) (int, error)
+
+func detectColors(w io.Writer) colors {
+	f, ok := w.(*os.File)
+	if !ok {
+		return noopColors(w)
+	}
+	fi, err := f.Stat()
+	if err != nil || (fi.Mode()&os.ModeCharDevice) == 0 {
+		return noopColors(w)
+	}
+	return colors{
+		ok:      green,
+		fail:    red,
+		skip:    yellow,
+		warn:    yellow,
+		dim:     dim,
+		section: makeSectionFmt(w, "34"),
+		header:  makeSectionFmt(w, "36"),
+	}
+}
+
+func noopColors(w io.Writer) colors {
+	noopStr := func(s string) string { return s }
+	return colors{
+		ok: noopStr, fail: noopStr, skip: noopStr, warn: noopStr, dim: noopStr,
+		section: func(format string, args ...interface{}) (int, error) {
+			return fmt.Fprintf(w, format, args...)
+		},
+		header: func(format string, args ...interface{}) (int, error) {
+			return fmt.Fprintf(w, format, args...)
+		},
+	}
+}
+
+func makeSectionFmt(w io.Writer, code string) fmtFunc {
+	return func(format string, args ...interface{}) (int, error) {
+		return fmt.Fprintf(w, "\033[1;"+code+"m"+format+"\033[0m", args...)
+	}
+}
+
+func green(s string) string  { return "\033[32m" + s + "\033[0m" }
+func red(s string) string    { return "\033[31m" + s + "\033[0m" }
+func yellow(s string) string { return "\033[33m" + s + "\033[0m" }
+func dim(s string) string    { return "\033[2m" + s + "\033[0m" }
+
+func statusGlyph(status report.Status, c colors) (string, func(string) string) {
 	switch status {
 	case report.StatusSuccess:
-		return "OK"
+		return "✓", c.ok
 	case report.StatusFailed:
-		return "FAIL"
+		return "✗", c.fail
 	case report.StatusSkipped:
-		return "SKIP"
+		return "●", c.skip
 	case report.StatusWarning:
-		return "WARN"
+		return "!", c.warn
 	default:
-		return "INFO"
+		return "·", dim
 	}
 }
 
-func trimSummary(summary string, max int) string {
-	summary = strings.TrimSpace(summary)
-	if len(summary) <= max {
-		return summary
+func levelColor(level string, c colors) func(string) string {
+	switch level {
+	case "high":
+		return red
+	case "medium":
+		return yellow
+	case "manual", "sensitive":
+		return dim
+	default:
+		return dim
 	}
-	if max <= 3 {
-		return summary[:max]
-	}
-	return summary[:max-3] + "..."
 }
 
 func shortPath(path string) string {

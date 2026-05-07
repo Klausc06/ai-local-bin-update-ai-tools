@@ -315,8 +315,9 @@ func TestPrintHumanShowsRisksWithoutResults(t *testing.T) {
 	}
 	printHuman(&buf, rep, redactor.New())
 	out := buf.String()
-	if !strings.Contains(out, "Needs Attention") {
-		t.Fatalf("expected attention section, got: %s", out)
+	// manual-level risks appear under "Advisory" section
+	if !strings.Contains(out, "Advisory") {
+		t.Fatalf("expected Advisory section, got: %s", out)
 	}
 	if !strings.Contains(out, "spotify") {
 		t.Fatalf("expected risk name in output, got: %s", out)
@@ -342,7 +343,7 @@ func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
 	}
 	printHuman(&buf, rep, redactor.New())
 	out := buf.String()
-	for _, want := range []string{"Summary", "Actions", "Needs Attention", "Checks", "Details", "codex-update", "backup-configs", "manual review"} {
+	for _, want := range []string{"Actions", "Warnings", "Checks", "Details", "Advisory", "codex-update", "backup-configs", "manual review"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in output:\n%s", want, out)
 		}
