@@ -274,71 +274,84 @@ func modeName(check, dryRun bool) string {
 }
 
 func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
-	fmt.Fprintf(w, "\nupdate-ai-tools  %s  summary\n", rep.Mode)
-	fmt.Fprintf(w, "\n  Log      %s\n", red.Redact(rep.LogPath))
-	if rep.BackupDir != "" {
-		fmt.Fprintf(w, "  Backup   %s\n", red.Redact(rep.BackupDir))
-	}
-
-	fmt.Fprintf(w, "\n  success %d  ·  failed %d  ·  skipped %d",
+	fmt.Fprintf(w, "\nupdate-ai-tools  %s complete\n", rep.Mode)
+	fmt.Fprintf(w, "\nSummary\n")
+	fmt.Fprintf(w, "  Success %d  Failed %d  Skipped %d",
 		rep.Summary.Success, rep.Summary.Failed, rep.Summary.Skipped)
 	if rep.Summary.Warning > 0 || rep.Summary.Info > 0 {
-		fmt.Fprintf(w, "  ·  warning %d", rep.Summary.Warning)
+		fmt.Fprintf(w, "  Warning %d", rep.Summary.Warning)
 	}
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "  Log     %s\n", red.Redact(rep.LogPath))
+	if rep.BackupDir != "" {
+		fmt.Fprintf(w, "  Backup  %s\n", red.Redact(rep.BackupDir))
+	}
 
-	// Calculate column widths.
-	nameW := 12
-	for _, r := range rep.Results {
-		if len(r.Name) > nameW {
-			nameW = len(r.Name)
+	actions, checks, support := splitResults(rep.Results)
+	printResultSection(w, "Actions", actions, red)
+	printAttentionSection(w, warningResults(rep.Results), report.DeduplicateRisks(rep.Risks), red)
+	printResultSection(w, "Checks", checks, red)
+	printResultSection(w, "Details", support, red)
+	fmt.Fprintln(w)
+}
+
+func splitResults(results []report.TaskResult) (actions, checks, support []report.TaskResult) {
+	for _, result := range results {
+		switch {
+		case result.Provider == "backup":
+			support = append(support, result)
+		case strings.HasSuffix(result.Name, "-version") ||
+			strings.HasSuffix(result.Name, "-mcp-list") ||
+			strings.HasSuffix(result.Name, "-mcp-list-after") ||
+			strings.HasSuffix(result.Name, "-doctor") ||
+			strings.HasSuffix(result.Name, "-doctor-after"):
+			checks = append(checks, result)
+		case strings.Contains(result.Name, "update"):
+			actions = append(actions, result)
+		default:
+			support = append(support, result)
 		}
 	}
-	if nameW > 28 {
-		nameW = 28
-	}
+	sortResults(actions)
+	sortResults(checks)
+	sortResults(support)
+	return actions, checks, support
+}
 
-	if len(rep.Results) > 0 {
-		fmt.Fprintln(w)
-		nameHdr := "NAME" + strings.Repeat(" ", nameW-4)
-		fmt.Fprintf(w, "  %s  STATUS    SUMMARY\n", nameHdr)
-
-		sort.Slice(rep.Results, func(i, j int) bool {
-			if rep.Results[i].Provider != rep.Results[j].Provider {
-				return rep.Results[i].Provider < rep.Results[j].Provider
-			}
-			return rep.Results[i].Name < rep.Results[j].Name
-		})
-
-		for _, r := range rep.Results {
-			name := r.Name
-			if len(name) > nameW {
-				name = name[:nameW-1] + "…"
-			}
-			summary := strings.TrimRight(r.Summary, "\n")
-			if len(summary) > 60 {
-				summary = summary[:57] + "..."
-			}
-			line := fmt.Sprintf("  %-*s  %-8s  %s", nameW, name, r.Status, summary)
-			fmt.Fprintln(w, red.Redact(line))
+func sortResults(results []report.TaskResult) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Provider != results[j].Provider {
+			return results[i].Provider < results[j].Provider
 		}
-	}
+		return results[i].Name < results[j].Name
+	})
+}
 
-	warnings := warningResults(rep.Results)
-	if len(warnings) > 0 {
-		fmt.Fprintf(w, "\n  %d warning(s)\n", len(warnings))
-		for _, warning := range warnings {
-			summary := strings.TrimRight(warning.Summary, "\n")
-			if len(summary) > 60 {
-				summary = summary[:57] + "..."
-			}
-			fmt.Fprintf(w, "  %-*s  %s\n", nameW, warning.Name, red.Redact(summary))
+func printResultSection(w io.Writer, title string, results []report.TaskResult, red redactor.Redactor) {
+	if len(results) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\n%s\n", title)
+	for _, result := range results {
+		status := statusMarker(result.Status)
+		summary := trimSummary(result.Summary, 72)
+		line := fmt.Sprintf("  %s %-26s %s", status, result.Name, summary)
+		if result.Status == report.StatusFailed && result.Error != "" {
+			line += " (" + result.Error + ")"
 		}
+		fmt.Fprintln(w, red.Redact(line))
 	}
+}
 
-	risks := report.DeduplicateRisks(rep.Risks)
+func printAttentionSection(w io.Writer, warnings []report.TaskResult, risks []report.Risk, red redactor.Redactor) {
+	if len(warnings) == 0 && len(risks) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "\nNeeds Attention")
+	for _, warning := range warnings {
+		fmt.Fprintf(w, "  ! %-26s %s\n", warning.Name, red.Redact(trimSummary(warning.Summary, 72)))
+	}
 	if len(risks) > 0 {
-		fmt.Fprintf(w, "\n  %d risk(s)\n", len(risks))
 		sort.Slice(risks, func(i, j int) bool {
 			if risks[i].Level != risks[j].Level {
 				return risks[i].Level < risks[j].Level
@@ -350,10 +363,46 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
 			if risk.Path != "" {
 				detail = risk.Path
 			}
-			fmt.Fprintf(w, "  [%s]  %s  — %s\n", risk.Level, red.Redact(detail), risk.Reason)
+			fmt.Fprintf(w, "  ! %-8s %-24s - %s\n", risk.Level, red.Redact(shortPath(detail)), risk.Reason)
 		}
 	}
-	fmt.Fprintln(w)
+}
+
+func statusMarker(status report.Status) string {
+	switch status {
+	case report.StatusSuccess:
+		return "OK"
+	case report.StatusFailed:
+		return "FAIL"
+	case report.StatusSkipped:
+		return "SKIP"
+	case report.StatusWarning:
+		return "WARN"
+	default:
+		return "INFO"
+	}
+}
+
+func trimSummary(summary string, max int) string {
+	summary = strings.TrimSpace(summary)
+	if len(summary) <= max {
+		return summary
+	}
+	if max <= 3 {
+		return summary[:max]
+	}
+	return summary[:max-3] + "..."
+}
+
+func shortPath(path string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && strings.HasPrefix(path, home) {
+		path = "~" + strings.TrimPrefix(path, home)
+	}
+	if len(path) <= 48 {
+		return path
+	}
+	return "..." + path[len(path)-45:]
 }
 
 func warningResults(results []report.TaskResult) []report.TaskResult {

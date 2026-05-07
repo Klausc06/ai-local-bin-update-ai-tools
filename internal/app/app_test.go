@@ -311,11 +311,37 @@ func TestPrintHumanShowsRisksWithoutResults(t *testing.T) {
 	}
 	printHuman(&buf, rep, redactor.New())
 	out := buf.String()
-	if !strings.Contains(out, "1 risk(s)") {
-		t.Fatalf("expected risk section, got: %s", out)
+	if !strings.Contains(out, "Needs Attention") {
+		t.Fatalf("expected attention section, got: %s", out)
 	}
 	if !strings.Contains(out, "spotify") {
 		t.Fatalf("expected risk name in output, got: %s", out)
+	}
+}
+
+func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:      "update",
+		LogPath:   "/tmp/update.log",
+		BackupDir: "/tmp/backup",
+		Summary:   report.Summary{Success: 3, Warning: 1},
+		Results: []report.TaskResult{
+			{Name: "backup-configs", Provider: "backup", Status: report.StatusSuccess, Summary: "backed up 3 configs"},
+			{Name: "codex-update", Provider: "codex", Status: report.StatusSuccess, Summary: "updated codex"},
+			{Name: "codex-version", Provider: "codex", Status: report.StatusSuccess, Summary: "codex 1.2.3"},
+			{Name: "claude-mcp-list-after", Provider: "claude", Status: report.StatusWarning, Summary: "Checking MCP server health..."},
+		},
+		Risks: []report.Risk{
+			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
+		},
+	}
+	printHuman(&buf, rep, redactor.New())
+	out := buf.String()
+	for _, want := range []string{"Summary", "Actions", "Needs Attention", "Checks", "Details", "codex-update", "backup-configs", "manual review"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output:\n%s", want, out)
+		}
 	}
 }
 
