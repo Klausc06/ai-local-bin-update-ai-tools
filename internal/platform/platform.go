@@ -32,29 +32,39 @@ func Detect(homeOverride string) Profile {
 		ClaudeHome:    filepath.Join(home, ".claude"),
 		AgentsHome:    filepath.Join(home, ".agents"),
 		WorkBuddyHome: filepath.Join(home, ".workbuddy"),
+		ConfigFiles: []string{
+			filepath.Join(home, ".codex", "config.toml"),
+			filepath.Join(home, ".codex", "hooks.json"),
+			filepath.Join(home, ".claude", "settings.json"),
+			filepath.Join(home, ".claude", "settings.local.json"),
+			filepath.Join(home, ".claude", ".mcp.json"),
+			filepath.Join(home, ".workbuddy", ".mcp.json"),
+			filepath.Join(home, ".workbuddy", "mcp.json"),
+			filepath.Join(home, ".workbuddy", ".connectors-marketplace.meta.json"),
+		},
 	}
 	switch runtime.GOOS {
 	case "darwin":
 		p.LaunchDirs = []string{filepath.Join(home, "Library", "LaunchAgents")}
 		p.Notes = append(p.Notes, "macOS adapter enabled")
 	case "linux":
-		p.LaunchDirs = []string{filepath.Join(home, ".config", "systemd", "user")}
-		p.Notes = append(p.Notes, "linux adapter stub: systemd user service detection reserved")
+		p.LaunchDirs = []string{
+			filepath.Join(home, ".config", "systemd", "user"),
+			filepath.Join(home, ".config", "autostart"),
+			filepath.Join(home, ".local", "share", "applications"),
+		}
+		p.ConfigFiles = append(p.ConfigFiles,
+			filepath.Join(home, ".config", "systemd", "user", "*.service"),
+		)
+		p.Notes = append(p.Notes, "linux adapter: systemd user services, XDG autostart, desktop entries")
 	case "windows":
-		p.LaunchDirs = []string{filepath.Join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup")}
-		p.Notes = append(p.Notes, "windows adapter stub: service and startup detection reserved")
+		p.LaunchDirs = []string{
+			filepath.Join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup"),
+			filepath.Join(home, "AppData", "Local", "Programs"),
+		}
+		p.Notes = append(p.Notes, "windows adapter: startup folder and local programs; Registry and Task Scheduler are manual review only")
 	default:
 		p.Notes = append(p.Notes, "unknown platform adapter")
-	}
-	p.ConfigFiles = []string{
-		filepath.Join(p.CodexHome, "config.toml"),
-		filepath.Join(p.CodexHome, "hooks.json"),
-		filepath.Join(p.ClaudeHome, "settings.json"),
-		filepath.Join(p.ClaudeHome, "settings.local.json"),
-		filepath.Join(p.ClaudeHome, ".mcp.json"),
-		filepath.Join(p.WorkBuddyHome, ".mcp.json"),
-		filepath.Join(p.WorkBuddyHome, "mcp.json"),
-		filepath.Join(p.WorkBuddyHome, ".connectors-marketplace.meta.json"),
 	}
 	return p
 }

@@ -66,9 +66,24 @@ These are reported but never automatically updated:
 ## Development
 
 ```bash
-GOCACHE="$PWD/.gocache" go test ./...
-GOCACHE="$PWD/.gocache" go build -o dist/update-ai-tools ./cmd/update-ai-tools
+make test
+make build
+make release
 ```
 
 The first complete implementation targets macOS. Linux and Windows platform
 paths are stubbed in the platform adapter so the core stays portable.
+
+`make release` writes reproducible local binaries to `dist/`:
+
+- `update-ai-tools-darwin-arm64`
+- `update-ai-tools-darwin-amd64`
+- `update-ai-tools-linux-arm64`
+- `update-ai-tools-linux-amd64`
+- `update-ai-tools-windows-amd64.exe`
+
+For local installation from a checkout:
+
+```bash
+make install
+```

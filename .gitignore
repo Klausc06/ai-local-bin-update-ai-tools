@@ -2,3 +2,5 @@
 .gocache/
 .testhome*/
 dist/
+.playwright-mcp/
+xiaomi-mimo-captcha.png
