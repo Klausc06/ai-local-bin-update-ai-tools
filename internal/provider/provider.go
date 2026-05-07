@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -298,7 +296,3 @@ func risksFromMCPOutput(provider, output string) []report.Risk {
 	return risks
 }
 
-func init() {
-	_ = runtime.GOOS
-	_ = exec.ErrNotFound
-}

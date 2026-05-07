@@ -53,10 +53,7 @@ func Detect(homeOverride string) Profile {
 			filepath.Join(home, ".config", "autostart"),
 			filepath.Join(home, ".local", "share", "applications"),
 		}
-		p.ConfigFiles = append(p.ConfigFiles,
-			filepath.Join(home, ".config", "systemd", "user", "*.service"),
-		)
-		p.Notes = append(p.Notes, "linux adapter: systemd user services, XDG autostart, desktop entries")
+		p.Notes = append(p.Notes, "linux adapter: systemd user services, XDG autostart, desktop entries; *.service files scanned via LaunchDirs")
 	case "windows":
 		p.LaunchDirs = []string{
 			filepath.Join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup"),
