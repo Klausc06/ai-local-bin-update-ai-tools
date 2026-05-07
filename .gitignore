@@ -1,0 +1,4 @@
+.omx/
+.gocache/
+.testhome*/
+dist/

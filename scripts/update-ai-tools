@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+if [[ -x "$repo_root/dist/update-ai-tools" ]]; then
+  exec "$repo_root/dist/update-ai-tools" "$@"
+fi
+
+if command -v go >/dev/null 2>&1; then
+  mkdir -p "$repo_root/dist"
+  GOCACHE="${GOCACHE:-$repo_root/.gocache}" go build -o "$repo_root/dist/update-ai-tools" "$repo_root/cmd/update-ai-tools"
+  exec "$repo_root/dist/update-ai-tools" "$@"
+fi
+
+printf 'update-ai-tools binary not found and go is not available.\n' >&2
+exit 127
