@@ -10,22 +10,23 @@ MCP binaries.
 ## Usage
 
 ```bash
+update-ai-tools
 update-ai-tools --check
 update-ai-tools --dry-run
-update-ai-tools --menu
-update-ai-tools
+update-ai-tools --update
 update-ai-tools --check --json
 update-ai-tools --version
 ```
 
 ## Modes
 
+- default: opens an interactive terminal menu so you can choose the action.
 - `--check`: inventory only. It writes a redacted log but does not back up or
   update configs.
 - `--dry-run`: inventory plus planned update commands. It does not back up or
   update configs.
 - `--menu`: opens an interactive terminal menu.
-- default: backs up known config files, runs safe update commands, then performs
+- `--update`: backs up known config files, runs safe update commands, then performs
   post-update checks.
 - `--json`: prints a machine-readable report for future WorkBuddy or frontend
   integration.
@@ -46,7 +47,7 @@ Backups from update mode are written to:
 
 ## Safe Updates
 
-The default update mode runs:
+The `Update` menu action and `--update` mode run:
 
 - `codex update`
 - `claude update`, with `claude upgrade` as a compatibility fallback

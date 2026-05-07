@@ -86,6 +86,18 @@ func TestParseArgsDefaults(t *testing.T) {
 	}
 }
 
+func TestDefaultArgsUsesMenu(t *testing.T) {
+	got := defaultArgs(nil)
+	if len(got) != 1 || got[0] != "--menu" {
+		t.Fatalf("expected no-arg default to --menu, got %v", got)
+	}
+	original := []string{"--check"}
+	got = defaultArgs(original)
+	if len(got) != 1 || got[0] != "--check" {
+		t.Fatalf("expected explicit args to be preserved, got %v", got)
+	}
+}
+
 func TestParseArgsCheck(t *testing.T) {
 	opts, err := parseArgs([]string{"--check"})
 	if err != nil {
@@ -133,6 +145,26 @@ func TestParseArgsMenu(t *testing.T) {
 	}
 	if !opts.menu {
 		t.Fatal("expected menu=true")
+	}
+}
+
+func TestParseArgsUpdate(t *testing.T) {
+	opts, err := parseArgs([]string{"--update"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !opts.update {
+		t.Fatal("expected update=true")
+	}
+}
+
+func TestParseArgsActionsExclusive(t *testing.T) {
+	_, err := parseArgs([]string{"--menu", "--update"})
+	if err == nil {
+		t.Fatal("expected error for --menu --update together")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutually exclusive error, got: %v", err)
 	}
 }
 

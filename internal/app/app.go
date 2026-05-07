@@ -27,6 +27,7 @@ type options struct {
 	check   bool
 	dryRun  bool
 	menu    bool
+	update  bool
 	version bool
 	jsonOut bool
 	verbose bool
@@ -38,6 +39,7 @@ type options struct {
 type stringSet map[string]bool
 
 func Run(args []string) error {
+	args = defaultArgs(args)
 	opts, err := parseArgs(args)
 	if err != nil {
 		return err
@@ -157,6 +159,7 @@ func parseArgs(args []string) (options, error) {
 	fs.BoolVar(&opts.check, "check", false, "inventory only; do not update or back up configs")
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "inventory and show planned update commands without backup or updates")
 	fs.BoolVar(&opts.menu, "menu", false, "show an interactive action menu")
+	fs.BoolVar(&opts.update, "update", false, "back up configs and run safe updates")
 	fs.BoolVar(&opts.version, "version", false, "print version and exit")
 	fs.BoolVar(&opts.jsonOut, "json", false, "print machine-readable JSON report")
 	fs.BoolVar(&opts.verbose, "verbose", false, "print command details to terminal")
@@ -169,8 +172,8 @@ func parseArgs(args []string) (options, error) {
 	if fs.NArg() != 0 {
 		return opts, usageError()
 	}
-	if opts.check && opts.dryRun {
-		return opts, fmt.Errorf("--check and --dry-run are mutually exclusive")
+	if countActions(opts.check, opts.dryRun, opts.menu, opts.update) > 1 {
+		return opts, fmt.Errorf("--check, --dry-run, --menu, and --update are mutually exclusive")
 	}
 	opts.home = *home
 	opts.only = parseSet(*only)
@@ -179,14 +182,31 @@ func parseArgs(args []string) (options, error) {
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run|--menu] [--json] [--verbose] [--only names] [--skip names]\n\n" +
+	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run|--menu|--update] [--json] [--verbose] [--only names] [--skip names]\n\n" +
 		"Examples:\n" +
+		"  update-ai-tools\n" +
 		"  update-ai-tools --check\n" +
 		"  update-ai-tools --dry-run\n" +
-		"  update-ai-tools --menu\n" +
+		"  update-ai-tools --update\n" +
 		"  update-ai-tools --version\n" +
-		"  update-ai-tools\n" +
 		"  update-ai-tools --check --json")
+}
+
+func defaultArgs(args []string) []string {
+	if len(args) == 0 {
+		return []string{"--menu"}
+	}
+	return args
+}
+
+func countActions(actions ...bool) int {
+	count := 0
+	for _, action := range actions {
+		if action {
+			count++
+		}
+	}
+	return count
 }
 
 func parseSet(raw string) stringSet {
@@ -390,7 +410,7 @@ func interactiveSelect() ([]string, error) {
 	case "2":
 		return []string{"--dry-run"}, nil
 	case "3":
-		return []string{}, nil
+		return []string{"--update"}, nil
 	case "4":
 		return []string{"--check", "--json"}, nil
 	case "5":
