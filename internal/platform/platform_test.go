@@ -53,16 +53,20 @@ func TestDetectConfigFiles(t *testing.T) {
 
 func TestDetectToolHomes(t *testing.T) {
 	p := Detect("/myhome")
-	if p.CodexHome != "/myhome/.codex" {
+	wantCodex := filepath.Join("/myhome", ".codex")
+	wantClaude := filepath.Join("/myhome", ".claude")
+	wantAgents := filepath.Join("/myhome", ".agents")
+	wantWorkBuddy := filepath.Join("/myhome", ".workbuddy")
+	if p.CodexHome != wantCodex {
 		t.Fatalf("unexpected CodexHome: %q", p.CodexHome)
 	}
-	if p.ClaudeHome != "/myhome/.claude" {
+	if p.ClaudeHome != wantClaude {
 		t.Fatalf("unexpected ClaudeHome: %q", p.ClaudeHome)
 	}
-	if p.AgentsHome != "/myhome/.agents" {
+	if p.AgentsHome != wantAgents {
 		t.Fatalf("unexpected AgentsHome: %q", p.AgentsHome)
 	}
-	if p.WorkBuddyHome != "/myhome/.workbuddy" {
+	if p.WorkBuddyHome != wantWorkBuddy {
 		t.Fatalf("unexpected WorkBuddyHome: %q", p.WorkBuddyHome)
 	}
 }
