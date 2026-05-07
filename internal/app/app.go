@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,6 +37,10 @@ type options struct {
 type stringSet map[string]bool
 
 func Run(args []string) error {
+	if len(args) == 0 && isTerminal() {
+		args = interactiveSelect()
+		fmt.Println()
+	}
 	opts, err := parseArgs(args)
 	if err != nil {
 		return err
@@ -276,4 +281,41 @@ func writeJSONReport(w io.Writer, rep report.Report, red redactor.Redactor) {
 	_, _ = w.Write([]byte("\nJSON report\n"))
 	_, _ = w.Write([]byte(red.Redact(string(data))))
 	_, _ = w.Write([]byte("\n"))
+}
+
+func isTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+func interactiveSelect() []string {
+	fmt.Println()
+	fmt.Println("update-ai-tools")
+	fmt.Println()
+	fmt.Println("Choose an action:")
+	fmt.Println("  [1] Check        — inventory only, no changes")
+	fmt.Println("  [2] Dry run      — show planned update commands")
+	fmt.Println("  [3] Update       — backup configs and run updates")
+	fmt.Println("  [4] Check (JSON) — inventory only, JSON output")
+	fmt.Println("  [5] Version      — print version and exit")
+	fmt.Println()
+	fmt.Print("Enter 1-5: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	switch strings.TrimSpace(line) {
+	case "2":
+		return []string{"--dry-run"}
+	case "3":
+		return []string{}
+	case "4":
+		return []string{"--check", "--json"}
+	case "5":
+		return []string{"--version"}
+	default:
+		return []string{"--check"}
+	}
 }
