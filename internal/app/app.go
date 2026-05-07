@@ -484,20 +484,20 @@ func statusGlyph(status report.Status, c colors) (string, func(string) string) {
 	case report.StatusWarning:
 		return "!", c.warn
 	default:
-		return "·", dim
+		return "·", c.dim
 	}
 }
 
 func levelColor(level string, c colors) func(string) string {
 	switch level {
 	case "high":
-		return red
+		return c.fail
 	case "medium":
-		return yellow
+		return c.warn
 	case "manual", "sensitive":
-		return dim
+		return c.dim
 	default:
-		return dim
+		return c.dim
 	}
 }
 

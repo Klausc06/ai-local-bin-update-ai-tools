@@ -350,6 +350,38 @@ func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
 	}
 }
 
+func TestPrintHumanNoAnsiInNonTTY(t *testing.T) {
+	// When writing to a non-TTY (buf), no ANSI escapes should leak.
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:    "check",
+		LogPath: "/tmp/test.log",
+		Risks: []report.Risk{
+			{Provider: "test", Name: "alpha", Level: "high", Reason: "critical", Path: "/tmp/alpha"},
+			{Provider: "test", Name: "beta", Level: "medium", Reason: "moderate", Path: "/tmp/beta"},
+			{Provider: "test", Name: "gamma", Level: "manual", Reason: "info", Path: "/tmp/gamma"},
+		},
+		Results: []report.TaskResult{
+			{Name: "check-version", Provider: "test", Status: report.StatusSuccess, Summary: "v1.0"},
+			{Name: "check-mcp", Provider: "test", Status: report.StatusWarning, Summary: "unreachable"},
+		},
+		Summary: report.Summary{Success: 1, Warning: 1},
+	}
+	printHuman(&buf, rep, redactor.New())
+	out := buf.String()
+	assertNoAnsi(t, out)
+	if !strings.Contains(out, "alpha") || !strings.Contains(out, "beta") || !strings.Contains(out, "gamma") {
+		t.Errorf("expected risk names in output: %s", out)
+	}
+}
+
+func assertNoAnsi(t *testing.T, out string) {
+	t.Helper()
+	if strings.Contains(out, "\033[") {
+		t.Errorf("ANSI escape codes found in non-TTY output")
+	}
+}
+
 // stubProvider implements provider.Provider for testing.
 type stubProvider struct {
 	name string
