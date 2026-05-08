@@ -37,17 +37,18 @@ func TestParseSetEmpty(t *testing.T) {
 
 func TestModeName(t *testing.T) {
 	cases := []struct {
-		check, dryRun bool
-		want          string
+		action action
+		want   string
 	}{
-		{false, false, "update"},
-		{true, false, "check"},
-		{false, true, "dry-run"},
+		{"", "check"},
+		{actionCheck, "check"},
+		{actionDryRun, "dry-run"},
+		{actionUpdate, "update"},
 	}
 	for _, c := range cases {
-		got := modeName(c.check, c.dryRun)
+		got := modeName(c.action)
 		if got != c.want {
-			t.Errorf("modeName(%v,%v) = %q, want %q", c.check, c.dryRun, got, c.want)
+			t.Errorf("modeName(%q) = %q, want %q", c.action, got, c.want)
 		}
 	}
 }
@@ -78,8 +79,8 @@ func TestParseArgsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if opts.check || opts.dryRun || opts.version || opts.jsonOut || opts.verbose {
-		t.Fatal("expected all flags to be false by default")
+	if opts.action != actionCheck || !opts.check || opts.dryRun || opts.version || opts.jsonOut || opts.verbose {
+		t.Fatalf("expected default check action, got %+v", opts)
 	}
 	if len(opts.only) != 0 || len(opts.skip) != 0 {
 		t.Fatal("expected empty only/skip")
@@ -180,6 +181,36 @@ func TestParseArgsJson(t *testing.T) {
 	if !opts.jsonOut {
 		t.Fatal("expected jsonOut=true")
 	}
+	if opts.action != actionCheck || !opts.check {
+		t.Fatalf("expected non-action --json to default to check, got %+v", opts)
+	}
+}
+
+func TestParseArgsNonActionFlagsDefaultToCheck(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "json", args: []string{"--json"}},
+		{name: "only", args: []string{"--only", "skills"}},
+		{name: "skip", args: []string{"--skip", "mcp"}},
+		{name: "verbose", args: []string{"--verbose"}},
+		{name: "combined", args: []string{"--json", "--verbose", "--only", "skills"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := parseArgs(tc.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !opts.check {
+				t.Fatalf("expected non-action args %v to default to check mode", tc.args)
+			}
+			if opts.dryRun || opts.menu || opts.update {
+				t.Fatalf("expected non-action args %v not to select a mutating mode", tc.args)
+			}
+		})
+	}
 }
 
 func TestParseArgsOnly(t *testing.T) {
@@ -268,6 +299,34 @@ func TestFilterProvidersCaseInsensitive(t *testing.T) {
 	result := filterProviders(all, only, nil)
 	if len(result) != 1 {
 		t.Fatal("expected case-insensitive match")
+	}
+}
+
+func TestValidateProviderFiltersRejectsUnknownOnly(t *testing.T) {
+	all := []provider.Provider{
+		stubProvider{name: "codex"},
+		stubProvider{name: "skills"},
+	}
+	err := validateProviderFilters(all, stringSet{"codex": true, "ghost": true}, nil)
+	if err == nil {
+		t.Fatal("expected unknown --only provider to be rejected")
+	}
+	if !strings.Contains(err.Error(), "--only") || !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("expected --only ghost error, got %v", err)
+	}
+}
+
+func TestValidateProviderFiltersRejectsUnknownSkip(t *testing.T) {
+	all := []provider.Provider{
+		stubProvider{name: "codex"},
+		stubProvider{name: "skills"},
+	}
+	err := validateProviderFilters(all, nil, stringSet{"ghost": true})
+	if err == nil {
+		t.Fatal("expected unknown --skip provider to be rejected")
+	}
+	if !strings.Contains(err.Error(), "--skip") || !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("expected --skip ghost error, got %v", err)
 	}
 }
 
@@ -417,12 +476,9 @@ func captureStdout(fn func() error) (string, error) {
 	err := fn()
 	w.Close()
 	os.Stdout = old
-	if err != nil {
-		return "", err
-	}
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)
-	return buf.String(), nil
+	return buf.String(), err
 }
 
 func TestRunVersion(t *testing.T) {
@@ -462,6 +518,213 @@ func TestRunCheckJson(t *testing.T) {
 	if len(rep.Inventory) == 0 {
 		t.Error("expected non-empty inventory")
 	}
+}
+
+func TestRunJsonWithoutActionDefaultsToCheck(t *testing.T) {
+	home := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".codex", "skills"), 0o700)
+	os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0o700)
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--json", "--only", "skills"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rep report.Report
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", err, out)
+	}
+	if rep.Mode != "check" {
+		t.Fatalf("expected --json without action to run check mode, got %q", rep.Mode)
+	}
+	for _, result := range rep.Results {
+		if result.Name == "backup-configs" || strings.Contains(result.Name, "update") {
+			t.Fatalf("non-action --json should not back up or update, got result %+v", result)
+		}
+	}
+}
+
+func TestRunRejectsUnknownProviderFilter(t *testing.T) {
+	home := t.TempDir()
+	err := Run([]string{"--home", home, "--check", "--only", "ghost"})
+	if err == nil {
+		t.Fatal("expected unknown provider error")
+	}
+	if !strings.Contains(err.Error(), "unknown provider") || !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("expected unknown provider error naming ghost, got %v", err)
+	}
+}
+
+func TestRunUpdateBlocksWhenBackupFails(t *testing.T) {
+	home := t.TempDir()
+	blockerParent := filepath.Join(home, ".codex", "backups")
+	if err := os.MkdirAll(blockerParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blockerParent, "update-ai-tools"), []byte("not a dir"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--json", "--only", "skills"})
+	})
+	if err == nil {
+		t.Fatal("expected update to return an error when backup fails")
+	}
+	if !strings.Contains(err.Error(), "backup did not complete") {
+		t.Fatalf("expected backup failure error, got %v", err)
+	}
+
+	var rep report.Report
+	if unmarshalErr := json.Unmarshal([]byte(out), &rep); unmarshalErr != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", unmarshalErr, out)
+	}
+	if rep.Mode != "update" {
+		t.Fatalf("expected update mode, got %q", rep.Mode)
+	}
+	var sawBackupFailure, sawUpdateSkip bool
+	for _, result := range rep.Results {
+		if result.Name == "backup-configs" && result.Status == report.StatusFailed {
+			sawBackupFailure = true
+		}
+		if result.Name == "updates-skipped" && result.Status == report.StatusSkipped {
+			sawUpdateSkip = true
+		}
+		if result.Name == "skills-update-global" {
+			t.Fatalf("update task should not run after backup failure: %+v", result)
+		}
+	}
+	if !sawBackupFailure || !sawUpdateSkip {
+		t.Fatalf("expected backup failure and updates-skipped results, got %+v", rep.Results)
+	}
+}
+
+func TestRunRejectsUnknownOnlyProvider(t *testing.T) {
+	err := Run([]string{"--home", t.TempDir(), "--check", "--json", "--only", "definitely-not-a-provider"})
+	if err == nil {
+		t.Fatal("expected unknown --only provider to return an error")
+	}
+	if !strings.Contains(err.Error(), "unknown provider") {
+		t.Fatalf("expected unknown provider error, got: %v", err)
+	}
+}
+
+func TestRunRejectsUnknownSkipProvider(t *testing.T) {
+	err := Run([]string{"--home", t.TempDir(), "--check", "--json", "--skip", "definitely-not-a-provider"})
+	if err == nil {
+		t.Fatal("expected unknown --skip provider to return an error")
+	}
+	if !strings.Contains(err.Error(), "unknown provider") {
+		t.Fatalf("expected unknown provider error, got: %v", err)
+	}
+}
+
+func TestRunDoesNotUpdateWhenBackupFails(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	if err := os.Mkdir(configPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, marker := installFakeNpx(t, 0)
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--json", "--only", "skills"})
+	})
+	if err == nil {
+		t.Fatal("expected backup warning to return an error")
+	}
+	if !strings.Contains(err.Error(), "backup did not complete") {
+		t.Fatalf("expected backup gating error, got %v", err)
+	}
+
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("expected backup warning to block update command; marker stat error=%v", err)
+	}
+	var rep report.Report
+	if unmarshalErr := json.Unmarshal([]byte(out), &rep); unmarshalErr != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", unmarshalErr, out)
+	}
+	assertTaskStatus(t, rep.Results, "backup-configs", report.StatusFailed)
+	assertTaskStatus(t, rep.Results, "updates-skipped", report.StatusSkipped)
+}
+
+func TestRunDoesNotUpdateWhenPartialBackupWarnsWithoutForce(t *testing.T) {
+	home := createPartialBackupWarningHome(t)
+	_, marker := installFakeNpx(t, 0)
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--json", "--only", "skills"})
+	})
+	if err == nil {
+		t.Fatal("expected partial backup warning to return an error without --force")
+	}
+	if !strings.Contains(err.Error(), "backup did not complete") {
+		t.Fatalf("expected backup gating error, got %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("expected backup warning to block update command; marker stat error=%v", err)
+	}
+	var rep report.Report
+	if unmarshalErr := json.Unmarshal([]byte(out), &rep); unmarshalErr != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", unmarshalErr, out)
+	}
+	assertTaskStatus(t, rep.Results, "backup-configs", report.StatusWarning)
+	assertTaskStatus(t, rep.Results, "updates-skipped", report.StatusSkipped)
+}
+
+func TestRunUpdateReturnsErrorWhenTaskFails(t *testing.T) {
+	home := t.TempDir()
+	installFakeNpx(t, 7)
+
+	_, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--json", "--only", "skills"})
+	})
+	if err == nil {
+		t.Fatal("expected non-interactive update to return an error when an update task fails")
+	}
+	if !strings.Contains(err.Error(), "failed task") {
+		t.Fatalf("expected failed task error, got: %v", err)
+	}
+}
+
+func TestRunUpdateReturnsErrorWhenSelectedUpdateTaskIsSkipped(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+
+	_, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--json", "--only", "skills"})
+	})
+	if err == nil {
+		t.Fatal("expected skipped selected update task to return an error")
+	}
+	if !strings.Contains(err.Error(), "skipped update task") || !strings.Contains(err.Error(), "skills-update-global") {
+		t.Fatalf("expected skipped update task name in error, got: %v", err)
+	}
+}
+
+func TestRunUpdateForceContinuesAfterPartialBackupWarning(t *testing.T) {
+	home := createPartialBackupWarningHome(t)
+	_, marker := installFakeNpx(t, 0)
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--update", "--force", "--json", "--only", "skills"})
+	})
+	if err != nil {
+		t.Fatalf("expected --force to continue after partial backup warning, got %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("expected update command to run with --force: %v", err)
+	}
+	var rep report.Report
+	if unmarshalErr := json.Unmarshal([]byte(out), &rep); unmarshalErr != nil {
+		t.Fatalf("expected valid JSON output, got error: %v\noutput: %s", unmarshalErr, out)
+	}
+	assertTaskStatus(t, rep.Results, "backup-configs", report.StatusWarning)
+	assertTaskStatus(t, rep.Results, "skills-update-global", report.StatusSuccess)
 }
 
 func TestRunCheckAndDryRunExclusive(t *testing.T) {
@@ -516,6 +779,58 @@ func TestInteractiveSelectReturnsErrorOnEOF(t *testing.T) {
 	if !strings.Contains(err.Error(), "read menu selection") {
 		t.Errorf("expected read menu selection error, got: %v", err)
 	}
+}
+
+func installFakeNpx(t *testing.T, exitCode int) (string, string) {
+	t.Helper()
+	binDir := t.TempDir()
+	marker := filepath.Join(binDir, "npx-invoked")
+	script := filepath.Join(binDir, "npx")
+	body := "#!/bin/sh\nprintf invoked > " + shellQuote(marker) + "\nexit " + string(rune('0'+exitCode)) + "\n"
+	if exitCode > 9 {
+		t.Fatalf("test helper only supports one-digit exit codes, got %d", exitCode)
+	}
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+oldPath)
+	return binDir, marker
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func createPartialBackupWarningHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".codex", "config.toml"), []byte("model = 'test'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(home, ".claude", "settings.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+func assertTaskStatus(t *testing.T, results []report.TaskResult, name string, status report.Status) {
+	t.Helper()
+	for _, result := range results {
+		if result.Name == name {
+			if result.Status != status {
+				t.Fatalf("expected %s status %s, got %s", name, status, result.Status)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected task %s in results, got %+v", name, results)
 }
 
 func TestDefaultArgsFallsBackToCheckWhenNoTTY(t *testing.T) {

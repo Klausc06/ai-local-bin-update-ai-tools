@@ -39,12 +39,19 @@ func (r *Runner) RunTask(task Task) report.TaskResult {
 		res.Summary = "no command configured"
 		return res
 	}
+	if path, err := exec.LookPath(task.Command[0]); err == nil {
+		res.ResolvedPath = path
+	}
 	if task.SkipIfMissing != "" {
-		if _, err := exec.LookPath(task.SkipIfMissing); err != nil {
+		path, err := exec.LookPath(task.SkipIfMissing)
+		if err != nil {
 			res.Status = report.StatusSkipped
 			res.Summary = task.SkipIfMissing + " not found"
 			res.Duration = time.Since(start)
 			return res
+		}
+		if task.SkipIfMissing == task.Command[0] {
+			res.ResolvedPath = path
 		}
 	}
 	timeout := task.Timeout

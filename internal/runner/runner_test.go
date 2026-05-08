@@ -86,6 +86,16 @@ func TestRunTaskSuccess(t *testing.T) {
 	if result.Output != "hello" {
 		t.Errorf("expected 'hello', got %q", result.Output)
 	}
+	if result.ResolvedPath == "" {
+		t.Fatal("expected resolved command path")
+	}
+	wantPath, err := exec.LookPath("echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ResolvedPath != wantPath {
+		t.Fatalf("expected resolved echo path %q, got %q", wantPath, result.ResolvedPath)
+	}
 }
 
 func TestRunTaskFailed(t *testing.T) {

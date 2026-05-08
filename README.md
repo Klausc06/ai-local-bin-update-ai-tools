@@ -28,10 +28,13 @@ update-ai-tools --version
 - `--menu`: opens an interactive terminal menu.
 - `--update`: backs up known config files, runs safe update commands, then performs
   post-update checks.
+- `--force`: with `--update`, continue after a partial backup warning. Hard
+  backup failures still block updates.
 - `--json`: prints a machine-readable report for future WorkBuddy or frontend
-  integration.
+  integration. Without an explicit action, this defaults to `--check`.
 - `--version`: prints the installed command version.
 - `--only codex,omx` / `--skip skills`: narrow the provider set while debugging.
+  Unknown provider names are rejected.
 
 Logs are written to:
 
@@ -54,7 +57,11 @@ The `Update` menu action and `--update` mode run:
 - `omx update`
 - `npx skills update -g -y`
 
-Each command is isolated. A failure in one update does not stop the rest.
+The backup must complete cleanly before update commands run. `--force` can
+continue after a partial backup warning, but hard backup failures still block
+updates. Each update command is isolated; a command failure does not stop the
+rest, but update mode returns a non-zero exit when a selected update task fails
+or is skipped because its executable is missing.
 
 ## Manual Review Items
 

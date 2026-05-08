@@ -60,14 +60,15 @@ type Risk struct {
 }
 
 type TaskResult struct {
-	Name     string        `json:"name"`
-	Provider string        `json:"provider"`
-	Status   Status        `json:"status"`
-	Summary  string        `json:"summary"`
-	Command  []string      `json:"command,omitempty"`
-	Duration time.Duration `json:"duration"`
-	Output   string        `json:"output,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Name         string        `json:"name"`
+	Provider     string        `json:"provider"`
+	Status       Status        `json:"status"`
+	Summary      string        `json:"summary"`
+	Command      []string      `json:"command,omitempty"`
+	ResolvedPath string        `json:"resolved_path,omitempty"`
+	Duration     time.Duration `json:"duration"`
+	Output       string        `json:"output,omitempty"`
+	Error        string        `json:"error,omitempty"`
 }
 
 type Logger struct {

@@ -127,14 +127,96 @@ Rewrote `printHuman()`:
 
 ---
 
+## Session 6 — Polish and cross-platform hardening (2026-05-07)
+
+### `fdcef95` — fix: use filepath.Join in TestDetectToolHomes for Windows compat
+
+Replaced hardcoded `/` path separators with `filepath.Join` in platform tests so the test suite passes on Windows.
+
+### `477888b` — fix: add MIT LICENSE, graceful TTY fallback for non-interactive environments
+
+- Added MIT LICENSE file for open-source distribution
+- `defaultArgs()` now falls back to `--check` when stdin is not a terminal (CI, scripts, pipes), preventing the interactive menu from blocking in automated workflows
+
+### `298ba63` — feat: color-coded output with cleaner section layout
+
+Rewrote `printHuman()` with full ANSI color support:
+- Green checkmarks / red X / yellow skip-warning glyphs, dim metadata
+- Top summary bar shows success/fail/skipped/warning counts at a glance
+- Results auto-sorted into Checks, Actions, and Details sections
+- Risks split into actionable Risks vs. informational Advisory groups
+- `detectColors()` auto-disables color when output is not a terminal (pipes, redirects)
+
+### `0b720e1` — fix: use colors-aware functions in levelColor and statusGlyph
+
+`levelColor()` and `statusGlyph()` now delegate to the `colors` struct's color functions rather than hardcoded raw strings, ensuring consistent color behavior across all output elements.
+
+**Milestone:** Cross-platform test suite, MIT-licensed, polished color output with clean section layout.
+
+---
+
+## Session 7 — Review of improvement report (2026-05-08)
+
+Reviewed CodeBuddy's `update-ai-tools-improvement-report.md` against the live repo.
+
+Key findings:
+- The report's P0 about explicit non-action flags is valid: `update-ai-tools --json`, `--verbose`, `--only ...`, or `--skip ...` can still run in update mode because only zero-argument invocations go through `defaultArgs()`.
+- The report's P0 about backup failure is valid: `backup.Configs()` records failed or warning status but the update loop continues unconditionally.
+- Provider allowlist validation, resolved command path recording, and failure exit-code policy are the most practical next P1 fixes.
+- Health/check separation is useful but should follow the safety fixes because current behavior matches the existing "full coverage, conservative, manual trigger" direction.
+- Provider file splitting and plugin-style providers are longer-term refactors, not immediate safety work.
+
+Recommended implementation order:
+1. Make action explicit so only `--update` or menu Update can mutate.
+2. Block updates on failed backup, with an explicit force override only if needed.
+3. Validate `--only` / `--skip` provider names.
+4. Add resolved command paths and non-zero exit policy for failed non-interactive updates.
+
+No code changes were made in this review pass.
+
+### Implementation follow-up — safety fixes from the report
+
+Implemented the immediate P0/P1 safety items:
+- Added an explicit action model so non-action flags default to check mode. `--json`, `--verbose`, `--only`, and `--skip` no longer imply update behavior.
+- Added provider-name validation for `--only` and `--skip`; unknown names now fail early with the valid provider list.
+- Made update mode require a clean backup before running update tasks. `--force` is the explicit override for partial backup warnings; hard backup failures still block updates.
+- Added non-zero update-mode errors when selected update tasks fail or are skipped because their executable is missing, while still allowing independent tasks to run and be reported.
+- Added `resolved_path` to task results so reports show the actual executable path found by `PATH`.
+- Updated README behavior notes for `--force`, non-action `--json`, provider validation, backup gating, and update failure exit behavior.
+
+Regression tests added/updated:
+- parser defaults for non-action flags
+- JSON check mode not backing up or updating
+- provider filter validation for `--only` / `--skip`
+- backup failure/warning blocking update execution
+- `--force` continuing after partial backup warnings
+- missing selected update executables returning non-zero
+- failed update task returning an error
+- runner resolved command path recording
+
+Verification:
+```text
+GOCACHE=/Users/klaus/Documents/Projects/ai-local-bin-update-ai-tools/.cache/go-build go test ./...
+```
+
+Result: all packages passed. The first test run without local `GOCACHE` was blocked by sandbox access to `/Users/klaus/Library/Caches/go-build`, so verification used a repo-local Go build cache.
+
+Code-review follow-up:
+- Strengthened backup warning/failure tests so they assert the returned error, JSON report content, and skipped update result.
+- Changed backup behavior so an existing config set where every copy fails is `failed`, not `warning`; `--force` only continues after partial backup warnings.
+- Made selected update tasks that resolve to `skipped` return a non-zero update-mode error.
+- Updated the drifted worklog summary counts.
+
+---
+
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 10 |
+| Total commits | 18 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 81 |
+| Test functions | 117 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |

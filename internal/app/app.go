@@ -23,12 +23,24 @@ import (
 
 var version = "0.1.0-dev"
 
+type action string
+
+const (
+	actionCheck   action = "check"
+	actionDryRun  action = "dry-run"
+	actionMenu    action = "menu"
+	actionUpdate  action = "update"
+	actionVersion action = "version"
+)
+
 type options struct {
+	action  action
 	check   bool
 	dryRun  bool
 	menu    bool
 	update  bool
 	version bool
+	force   bool
 	jsonOut bool
 	verbose bool
 	home    string
@@ -79,11 +91,14 @@ func Run(args []string) error {
 	cmdRunner := runner.New(red, log)
 
 	registry := provider.DefaultRegistry(profile, cmdRunner)
+	if err := validateProviderFilters(registry, opts.only, opts.skip); err != nil {
+		return err
+	}
 	active := filterProviders(registry, opts.only, opts.skip)
 
 	rep := report.Report{
 		StartedAt: started,
-		Mode:      modeName(opts.check, opts.dryRun),
+		Mode:      modeName(opts.action),
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
 		LogPath:   logPath,
@@ -102,7 +117,9 @@ func Run(args []string) error {
 	}
 	rep.Risks = report.DeduplicateRisks(rep.Risks)
 
-	if opts.dryRun {
+	var runErr error
+	selectedUpdateTasks := map[string]bool{}
+	if opts.action == actionDryRun {
 		rep.Results = append(rep.Results, report.TaskResult{
 			Name:     "backup-configs",
 			Provider: "backup",
@@ -120,18 +137,36 @@ func Run(args []string) error {
 				})
 			}
 		}
-	} else if !opts.check {
+	} else if opts.action == actionUpdate {
 		backupDir, result := backup.Configs(profile, red, log)
 		rep.BackupDir = backupDir
 		rep.Results = append(rep.Results, result)
-		for _, p := range active {
-			for _, task := range p.UpdateTasks() {
-				log.Infof("update: %s", task.Name)
-				rep.Results = append(rep.Results, cmdRunner.RunTask(task))
+		canContinueAfterBackup := result.Status == report.StatusSuccess ||
+			(opts.force && result.Status == report.StatusWarning)
+		if !canContinueAfterBackup {
+			msg := "backup did not complete cleanly; updates skipped (use --force to override)"
+			log.Infof(msg)
+			rep.Results = append(rep.Results, report.TaskResult{
+				Name:     "updates-skipped",
+				Provider: "update",
+				Status:   report.StatusSkipped,
+				Summary:  msg,
+			})
+			runErr = fmt.Errorf("backup did not complete cleanly; updates skipped")
+		} else {
+			if result.Status != report.StatusSuccess && opts.force {
+				log.Infof("force enabled; continuing after backup warning")
 			}
-		}
-		for _, p := range active {
-			rep.Results = append(rep.Results, p.PostUpdateChecks()...)
+			for _, p := range active {
+				for _, task := range p.UpdateTasks() {
+					selectedUpdateTasks[task.Name] = true
+					log.Infof("update: %s", task.Name)
+					rep.Results = append(rep.Results, cmdRunner.RunTask(task))
+				}
+			}
+			for _, p := range active {
+				rep.Results = append(rep.Results, p.PostUpdateChecks()...)
+			}
 		}
 	}
 
@@ -149,6 +184,17 @@ func Run(args []string) error {
 	}
 
 	writeJSONReport(logFile, rep, red)
+	if runErr != nil {
+		return runErr
+	}
+	if opts.action == actionUpdate {
+		if names := taskNamesWithStatus(rep.Results, selectedUpdateTasks, report.StatusSkipped); len(names) > 0 {
+			return fmt.Errorf("update completed with %d skipped update task(s): %s", len(names), strings.Join(names, ", "))
+		}
+	}
+	if opts.action == actionUpdate && rep.Summary.Failed > 0 {
+		return fmt.Errorf("update completed with %d failed task(s): %s", rep.Summary.Failed, strings.Join(failedTaskNames(rep.Results), ", "))
+	}
 	return nil
 }
 
@@ -161,6 +207,7 @@ func parseArgs(args []string) (options, error) {
 	fs.BoolVar(&opts.menu, "menu", false, "show an interactive action menu")
 	fs.BoolVar(&opts.update, "update", false, "back up configs and run safe updates")
 	fs.BoolVar(&opts.version, "version", false, "print version and exit")
+	fs.BoolVar(&opts.force, "force", false, "continue update even if backup reports warnings or failures")
 	fs.BoolVar(&opts.jsonOut, "json", false, "print machine-readable JSON report")
 	fs.BoolVar(&opts.verbose, "verbose", false, "print command details to terminal")
 	home := fs.String("home", "", "override home directory for testing")
@@ -172,17 +219,32 @@ func parseArgs(args []string) (options, error) {
 	if fs.NArg() != 0 {
 		return opts, usageError()
 	}
-	if countActions(opts.check, opts.dryRun, opts.menu, opts.update) > 1 {
-		return opts, fmt.Errorf("--check, --dry-run, --menu, and --update are mutually exclusive")
+	if countActions(opts.check, opts.dryRun, opts.menu, opts.update, opts.version) > 1 {
+		return opts, fmt.Errorf("--check, --dry-run, --menu, --update, and --version are mutually exclusive")
 	}
 	opts.home = *home
 	opts.only = parseSet(*only)
 	opts.skip = parseSet(*skip)
+	switch {
+	case opts.check:
+		opts.action = actionCheck
+	case opts.dryRun:
+		opts.action = actionDryRun
+	case opts.menu:
+		opts.action = actionMenu
+	case opts.update:
+		opts.action = actionUpdate
+	case opts.version:
+		opts.action = actionVersion
+	default:
+		opts.action = actionCheck
+		opts.check = true
+	}
 	return opts, nil
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run|--menu|--update] [--json] [--verbose] [--only names] [--skip names]\n\n" +
+	return fmt.Errorf("usage: update-ai-tools [--check|--dry-run|--menu|--update|--version] [--json] [--verbose] [--force] [--only names] [--skip names]\n\n" +
 		"Examples:\n" +
 		"  update-ai-tools\n" +
 		"  update-ai-tools --check\n" +
@@ -238,6 +300,47 @@ func filterProviders(all []provider.Provider, only, skip stringSet) []provider.P
 	return out
 }
 
+func failedTaskNames(results []report.TaskResult) []string {
+	var names []string
+	for _, result := range results {
+		if result.Status == report.StatusFailed {
+			names = append(names, result.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func taskNamesWithStatus(results []report.TaskResult, taskNames map[string]bool, status report.Status) []string {
+	var names []string
+	for _, result := range results {
+		if taskNames[result.Name] && result.Status == status {
+			names = append(names, result.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func validateProviderFilters(all []provider.Provider, only, skip stringSet) error {
+	valid := map[string]bool{}
+	var names []string
+	for _, p := range all {
+		name := strings.ToLower(p.Name())
+		valid[name] = true
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for flagName, set := range map[string]stringSet{"--only": only, "--skip": skip} {
+		for name := range set {
+			if !valid[name] {
+				return fmt.Errorf("%s contains unknown provider %q (valid: %s)", flagName, name, strings.Join(names, ", "))
+			}
+		}
+	}
+	return nil
+}
+
 func logPath(home string, t time.Time) string {
 	return filepath.Join(home, ".codex", "log", "update-ai-tools", t.Format("20060102-150405")+".log")
 }
@@ -266,14 +369,11 @@ func createLogFile(home string, t time.Time) (string, *os.File, error) {
 	return base, nil, fmt.Errorf("all log filenames already exist for %s", filepath.Base(base))
 }
 
-func modeName(check, dryRun bool) string {
-	if check {
-		return "check"
+func modeName(a action) string {
+	if a == "" {
+		return string(actionCheck)
 	}
-	if dryRun {
-		return "dry-run"
-	}
-	return "update"
+	return string(a)
 }
 
 func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {

@@ -41,10 +41,11 @@ func Configs(profile platform.Profile, red redactor.Redactor, log *report.Logger
 	}
 	res.Duration = time.Since(start)
 	if firstErr != nil {
-		res.Status = report.StatusWarning
 		if copied == 0 {
+			res.Status = report.StatusFailed
 			res.Summary = "failed to back up any configs"
 		} else {
+			res.Status = report.StatusWarning
 			res.Summary = fmt.Sprintf("backed up %d configs; some failed", copied)
 		}
 		res.Error = firstErr.Error()

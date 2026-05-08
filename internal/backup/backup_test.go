@@ -102,6 +102,55 @@ func TestConfigsSkipsMissingFiles(t *testing.T) {
 	}
 }
 
+func TestConfigsFailsWhenNoExistingConfigCanBeCopied(t *testing.T) {
+	home := t.TempDir()
+	codex := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codex, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(codex, "config.toml"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	profile := platform.Detect(home)
+	red := redactor.New()
+	var buf testWriter
+	log := report.NewLogger(&buf, &buf, red, true)
+
+	_, result := Configs(profile, red, log)
+	if result.Status != report.StatusFailed {
+		t.Fatalf("expected failed when every existing config copy fails, got %s: %s", result.Status, result.Summary)
+	}
+}
+
+func TestConfigsWarnsWhenSomeExistingConfigsFail(t *testing.T) {
+	home := t.TempDir()
+	codex := filepath.Join(home, ".codex")
+	claude := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(codex, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(claude, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codex, "config.toml"), []byte("[test]"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(claude, "settings.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	profile := platform.Detect(home)
+	red := redactor.New()
+	var buf testWriter
+	log := report.NewLogger(&buf, &buf, red, true)
+
+	_, result := Configs(profile, red, log)
+	if result.Status != report.StatusWarning {
+		t.Fatalf("expected warning when only some config copies fail, got %s: %s", result.Status, result.Summary)
+	}
+}
+
 type testWriter struct{}
 
 func (testWriter) Write(p []byte) (int, error) { return len(p), nil }
