@@ -372,7 +372,7 @@ func TestPrintHumanShowsRisksWithoutResults(t *testing.T) {
 			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
 		},
 	}
-	printHuman(&buf, rep, redactor.New())
+	printHuman(&buf, rep, redactor.New(), true)
 	out := buf.String()
 	// manual-level risks appear under "Advisory" section
 	if !strings.Contains(out, "Advisory") {
@@ -400,7 +400,7 @@ func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
 			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
 		},
 	}
-	printHuman(&buf, rep, redactor.New())
+	printHuman(&buf, rep, redactor.New(), true)
 	out := buf.String()
 	for _, want := range []string{"Actions", "Warnings", "Checks", "Details", "Advisory", "codex-update", "backup-configs", "manual review"} {
 		if !strings.Contains(out, want) {
@@ -426,7 +426,7 @@ func TestPrintHumanNoAnsiInNonTTY(t *testing.T) {
 		},
 		Summary: report.Summary{Success: 1, Warning: 1},
 	}
-	printHuman(&buf, rep, redactor.New())
+	printHuman(&buf, rep, redactor.New(), true)
 	out := buf.String()
 	assertNoAnsi(t, out)
 	if !strings.Contains(out, "alpha") || !strings.Contains(out, "beta") || !strings.Contains(out, "gamma") {
@@ -881,5 +881,129 @@ func TestRunExplicitMenuErrorsWithoutTTY(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--check") {
 		t.Errorf("expected suggestion to use --check, got: %v", err)
+	}
+}
+
+func TestPrintHumanNonVerboseHidesChecksDetailsAdvisory(t *testing.T) {
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:      "update",
+		LogPath:   "/tmp/update.log",
+		BackupDir: "/tmp/backup",
+		Summary:   report.Summary{Success: 4, Warning: 1, Failed: 1},
+		Results: []report.TaskResult{
+			{Name: "backup-configs", Provider: "backup", Status: report.StatusSuccess, Summary: "backed up 3 configs"},
+			{Name: "codex-update", Provider: "codex", Status: report.StatusSuccess, Summary: "updated codex"},
+			{Name: "codex-version", Provider: "codex", Status: report.StatusSuccess, Summary: "codex 1.2.3"},
+			{Name: "claude-doctor", Provider: "claude", Status: report.StatusSuccess, Summary: "claude healthy"},
+			{Name: "claude-mcp-list-after", Provider: "claude", Status: report.StatusWarning, Summary: "Checking MCP server health..."},
+		},
+		Risks: []report.Risk{
+			{Provider: "mcp", Name: "spotify", Level: "high", Reason: "critical issue", Path: "/tmp/spotify"},
+			{Provider: "mcp", Name: "xhs", Level: "manual", Reason: "manual review", Path: "/tmp/xhs"},
+		},
+	}
+	printHuman(&buf, rep, redactor.New(), false)
+	out := buf.String()
+	assertNoAnsi(t, out)
+
+	// must show: summary bar, Actions, Warnings, actionable Risks, log/backup paths
+	for _, want := range []string{"Actions", "codex-update", "Warnings", "/tmp/backup"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in non-verbose output:\n%s", want, out)
+		}
+	}
+	// actionable risks should appear
+	if !strings.Contains(out, "Risks") {
+		t.Fatal("expected Risks section in non-verbose output")
+	}
+	if !strings.Contains(out, "critical issue") {
+		t.Fatal("expected actionable risk in non-verbose output")
+	}
+
+	// must hide: Checks, Details, Advisory
+	for _, unwanted := range []string{"Checks", "Details", "Advisory", "codex-version", "claude-doctor"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("unexpected %q in non-verbose output:\n%s", unwanted, out)
+		}
+	}
+	// manual risk should not appear (only in Advisory)
+	if strings.Contains(out, "manual review") {
+		t.Fatal("advisory risk should be hidden in non-verbose mode")
+	}
+}
+
+func TestPrintHumanVerboseShowsAllSections(t *testing.T) {
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:    "check",
+		LogPath: "/tmp/test.log",
+		Summary: report.Summary{Success: 2},
+		Results: []report.TaskResult{
+			{Name: "backup-configs", Provider: "backup", Status: report.StatusSuccess, Summary: "backed up"},
+			{Name: "codex-version", Provider: "codex", Status: report.StatusSuccess, Summary: "codex 1.0"},
+			{Name: "claude-mcp-list", Provider: "claude", Status: report.StatusSuccess, Summary: "2 servers"},
+		},
+		Risks: []report.Risk{
+			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
+		},
+	}
+	printHuman(&buf, rep, redactor.New(), true)
+	out := buf.String()
+	assertNoAnsi(t, out)
+
+	for _, want := range []string{"Checks", "Details", "Advisory", "codex-version", "backed up", "manual review"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in verbose output:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrintHumanNonVerboseNoSectionsWithoutContent(t *testing.T) {
+	// when there are no warnings or risks, those sections should not render at all
+	var buf bytes.Buffer
+	rep := report.Report{
+		Mode:    "check",
+		LogPath: "/tmp/test.log",
+		Summary: report.Summary{Success: 0},
+	}
+	printHuman(&buf, rep, redactor.New(), false)
+	out := buf.String()
+	for _, unwanted := range []string{"Actions", "Warnings", "Risks"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("empty section %q should not render:\n%s", unwanted, out)
+		}
+	}
+}
+
+func TestRunVerboseShowsInfoToConsole(t *testing.T) {
+	home := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".codex", "skills"), 0o700)
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--check", "--verbose", "--only", "skills"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// verbose should show INFO log lines on console
+	if !strings.Contains(out, "INFO") {
+		t.Error("expected INFO log lines in verbose output")
+	}
+}
+
+func TestRunNonVerboseHidesInfoFromConsole(t *testing.T) {
+	home := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".codex", "skills"), 0o700)
+
+	out, err := captureStdout(func() error {
+		return Run([]string{"--home", home, "--check", "--only", "skills"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// non-verbose should not show INFO log lines on console
+	if strings.Contains(out, "INFO") {
+		t.Error("expected no INFO log lines in non-verbose console output")
 	}
 }

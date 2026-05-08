@@ -83,7 +83,7 @@ func NewLogger(file, console io.Writer, red redactor.Redactor, verbose bool) *Lo
 }
 
 func (l *Logger) Infof(format string, args ...any) {
-	l.write("INFO", fmt.Sprintf(format, args...), true)
+	l.write("INFO", fmt.Sprintf(format, args...), l.verbose)
 }
 
 func (l *Logger) Detailf(format string, args ...any) {

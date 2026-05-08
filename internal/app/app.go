@@ -180,7 +180,7 @@ func Run(args []string) error {
 			return err
 		}
 	} else {
-		printHuman(os.Stdout, rep, red)
+		printHuman(os.Stdout, rep, red, opts.verbose)
 	}
 
 	writeJSONReport(logFile, rep, red)
@@ -376,7 +376,7 @@ func modeName(a action) string {
 	return string(a)
 }
 
-func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
+func printHuman(w io.Writer, rep report.Report, red redactor.Redactor, verbose bool) {
 	c := detectColors(w)
 
 	fmt.Fprintln(w)
@@ -405,11 +405,19 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor) {
 	}
 
 	actions, checks, support := splitResults(rep.Results)
-	printResultSection(w, "Checks", checks, red, c)
+	if verbose {
+		printResultSection(w, "Checks", checks, red, c)
+	}
 	printResultSection(w, "Actions", actions, red, c)
-	printRisksSection(w, rep.Risks, red, c)
+	if verbose {
+		printRisksSection(w, rep.Risks, red, c)
+	} else {
+		printRisksSectionBrief(w, rep.Risks, red, c)
+	}
 	printWarningsSection(w, warningResults(rep.Results), red, c)
-	printResultSection(w, "Details", support, red, c)
+	if verbose {
+		printResultSection(w, "Details", support, red, c)
+	}
 	fmt.Fprintln(w)
 }
 
@@ -492,6 +500,20 @@ func printRisksSection(w io.Writer, risks []report.Risk, red redactor.Redactor, 
 
 	printRiskGroup(w, action, "Risks", c)
 	printRiskGroup(w, info, "Advisory", c)
+}
+
+func printRisksSectionBrief(w io.Writer, risks []report.Risk, red redactor.Redactor, c colors) {
+	risks = report.DeduplicateRisks(risks)
+	if len(risks) == 0 {
+		return
+	}
+	var action []report.Risk
+	for _, r := range risks {
+		if r.Level != "manual" && r.Level != "sensitive" {
+			action = append(action, r)
+		}
+	}
+	printRiskGroup(w, action, "Risks", c)
 }
 
 func printRiskGroup(w io.Writer, risks []report.Risk, title string, c colors) {

@@ -62,7 +62,20 @@ func TestSummarizeEmpty(t *testing.T) {
 	}
 }
 
-func TestLoggerInfof(t *testing.T) {
+func TestLoggerInfofVerbose(t *testing.T) {
+	var fileBuf, consoleBuf bytes.Buffer
+	red := redactor.New()
+	log := NewLogger(&fileBuf, &consoleBuf, red, true)
+	log.Infof("test message %d", 42)
+	if !strings.Contains(fileBuf.String(), "test message 42") {
+		t.Errorf("file buffer missing message: %q", fileBuf.String())
+	}
+	if !strings.Contains(consoleBuf.String(), "test message 42") {
+		t.Errorf("verbose=true should write info to console: %q", consoleBuf.String())
+	}
+}
+
+func TestLoggerInfofNotVerbose(t *testing.T) {
 	var fileBuf, consoleBuf bytes.Buffer
 	red := redactor.New()
 	log := NewLogger(&fileBuf, &consoleBuf, red, false)
@@ -70,8 +83,8 @@ func TestLoggerInfof(t *testing.T) {
 	if !strings.Contains(fileBuf.String(), "test message 42") {
 		t.Errorf("file buffer missing message: %q", fileBuf.String())
 	}
-	if !strings.Contains(consoleBuf.String(), "test message 42") {
-		t.Errorf("console buffer missing message: %q", consoleBuf.String())
+	if strings.Contains(consoleBuf.String(), "test message 42") {
+		t.Error("verbose=false should not write info to console")
 	}
 }
 
