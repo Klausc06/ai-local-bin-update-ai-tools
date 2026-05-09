@@ -22,6 +22,7 @@ install: build
 	mkdir -p "$$HOME/.local/bin"
 	cp "$(DIST_DIR)/$(BINARY)" "$$HOME/.local/bin/$(BINARY)"
 	chmod +x "$$HOME/.local/bin/$(BINARY)"
+	codesign --force --sign - "$$HOME/.local/bin/$(BINARY)" 2>/dev/null || true
 	"$$HOME/.local/bin/$(BINARY)" --version
 
 clean:
