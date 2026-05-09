@@ -213,10 +213,10 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 22 |
+| Total commits | 23 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 136 |
+| Test functions | 137 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |
@@ -263,3 +263,13 @@ Tests: 130 passing, app 88.3%, runner 81.1%, all 7 packages with -race.
 - `skills` npm package installed globally to eliminate `npm warn exec` noise.
 
 Tests: 136 passing, runner 82.3%, all 7 packages with -race.
+
+### `11188fc` — feat: add progress output during update mode
+
+- `Logger.Progressf` always writes to console (bypasses verbose gate) and to file.
+- Update mode prints progress: `Backing up configs...` → `Updating codex...` etc
+  → `Running post-update checks...`, so users see activity instead of a silent wait.
+- Only providers with actual update tasks trigger progress lines.
+- Added `TestLoggerProgressfAlwaysConsole`.
+
+Tests: 137 passing, app 88.4%, report 96.6%, all 7 packages with -race.
