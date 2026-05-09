@@ -257,3 +257,38 @@ func TestFirstSignificantLineCarriageReturn(t *testing.T) {
 		t.Errorf("expected 'progress 1', got %q", got)
 	}
 }
+
+func TestNormalizeSummaryStripsEmoji(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"\U0001F389 Update ran successfully! Please restart Codex.", "updated"},
+		{"✓ All global skills are up to date", "All global skills are up to date"},
+		{"✓ 4 skills are already up to date", "4 skills are up to date"},
+	}
+	for _, tc := range cases {
+		got := normalizeSummary(tc.in)
+		if got != tc.want {
+			t.Errorf("normalizeSummary(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeSummaryStripsBracketedPrefix(t *testing.T) {
+	got := normalizeSummary("[omx] oh-my-codex is already up to date (v0.16.3).")
+	want := "oh-my-codex is up to date (v0.16.3)."
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestNormalizeSummaryPassthrough(t *testing.T) {
+	cases := []string{
+		"Current version: 2.1.138",
+		"changed 2 packages in 828ms",
+	}
+	for _, s := range cases {
+		got := normalizeSummary(s)
+		if got != s {
+			t.Errorf("normalizeSummary(%q) = %q, want unchanged", s, got)
+		}
+	}
+}

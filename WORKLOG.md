@@ -294,3 +294,25 @@ Tests: 136 passing, runner 82.3%, all 7 packages with -race.
 - Aligned with `~/free-claude-code/.memory/conventions.md` cross-agent standards.
 
 Tests: 138 passing, app 88.7%, runner 82.3%, report 91.7%, all 7 packages with -race.
+
+---
+
+## Session 9 — Summary normalization
+
+### normalizeSummary: unify update tool status lines
+
+Problem: The 4 update tools produce inconsistent status lines:
+- `claude-update` → `Current version: 2.1.138` (plain)
+- `codex-update` → `🎉 Update ran successfully! Please restart Codex.` (emoji, verbose)
+- `omx-update` → `[omx] oh-my-codex is already up to date (v0.16.3).` (bracketed prefix)
+- `skills-update-global` → `✓ All global skills are up to date` (checkmark)
+
+Added `normalizeSummary` in `internal/runner/runner.go`:
+- Strips leading emoji/unicode symbols (🎉, ✓, ✗, ⚠, etc.)
+- Strips `[bracketed]` tool prefixes
+- Compacts verbose phrases: ` already up to date` → ` up to date`, `Update ran successfully!` → `updated`
+- Truncates `updated` with trailing fluff (e.g. `Please restart Codex.`)
+- Collapses whitespace
+
+Tests: 141 passing (3 new: strips emoji, strips bracketed prefix, passthrough).
+Coverage: runner 82.9%, all 7 packages pass.

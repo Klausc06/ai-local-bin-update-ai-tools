@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -791,12 +793,19 @@ func installFakeNpx(t *testing.T, exitCode int) (string, string) {
 	t.Helper()
 	binDir := t.TempDir()
 	marker := filepath.Join(binDir, "npx-invoked")
-	script := filepath.Join(binDir, "npx")
-	body := "#!/bin/sh\nprintf invoked > " + shellQuote(marker) + "\nexit " + string(rune('0'+exitCode)) + "\n"
-	if exitCode > 9 {
-		t.Fatalf("test helper only supports one-digit exit codes, got %d", exitCode)
+
+	var scriptPath string
+	var body string
+
+	if runtime.GOOS == "windows" {
+		scriptPath = filepath.Join(binDir, "npx.cmd")
+		body = "@echo off\r\necho invoked> \"" + marker + "\"\r\nexit /b " + strconv.Itoa(exitCode) + "\r\n"
+	} else {
+		scriptPath = filepath.Join(binDir, "npx")
+		body = "#!/bin/sh\nprintf invoked > " + shellQuote(marker) + "\nexit " + strconv.Itoa(exitCode) + "\n"
 	}
-	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+
+	if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	oldPath := os.Getenv("PATH")

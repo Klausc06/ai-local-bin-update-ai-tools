@@ -99,7 +99,7 @@ func (r *Runner) RunTask(task Task) report.TaskResult {
 		return res
 	}
 	res.Status = report.StatusSuccess
-	res.Summary = compactSummary(res.Output, "ok")
+	res.Summary = normalizeSummary(compactSummary(res.Output, "ok"))
 	r.log.Detailf("%s output: %s", task.Name, res.Output)
 	return res
 }
@@ -209,6 +209,37 @@ func normalizeLines(s string) string {
 
 func looksLikeHealthWarning(s string) bool {
 	return strings.Contains(strings.ToLower(s), "failed to connect")
+}
+
+func normalizeSummary(s string) string {
+	// Strip leading emoji and unicode symbols.
+	s = strings.TrimLeft(s, "\U0001F389✓✗⚠⚡\U0001F527\U0001F680\U0001F4A1⭐❗❌✅⚠️")
+	s = strings.TrimSpace(s)
+
+	// Strip [bracketed] tool prefixes (e.g. "[omx]").
+	for strings.HasPrefix(s, "[") {
+		idx := strings.Index(s, "]")
+		if idx < 0 {
+			break
+		}
+		s = strings.TrimSpace(s[idx+1:])
+	}
+
+	// Compact verbose phrases to short equivalents.
+	s = strings.ReplaceAll(s, " already up to date", " up to date")
+	s = strings.ReplaceAll(s, "Already up to date", "Up to date")
+	s = strings.ReplaceAll(s, "Update ran successfully!", "updated")
+	// If "updated" appears with trailing content, drop the trailing fluff.
+	if strings.HasPrefix(s, "updated ") || strings.Contains(s, " updated ") {
+		s = strings.TrimSpace(strings.SplitN(s, "Please", 2)[0])
+	}
+
+	// Collapse whitespace.
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return s
+	}
+	return strings.Join(fields, " ")
 }
 
 func shouldTryFallback(s string) bool {

@@ -45,3 +45,10 @@
 - `printRisksSectionBrief`, `compactSummary`, `lastSignificantLine`, `normalizeLines`, `ProgressBar`, `ProgressDone` helpers added; dead `Progressf` removed
 - Coverage: app 88.7%, runner 82.3%, report 91.7%, all 7 packages pass with -race
 - Installed: `update-ai-tools 3429ea2`
+
+## 2026-05-10: Session 9 — normalizeSummary
+
+- Added `normalizeSummary` to unify inconsistent status lines across the 4 update tools
+- Strips emoji, `[bracketed]` prefixes, compacts verbose phrases
+- Decision: normalization is lossy by design — canonical forms are for display only, not logging
+- Preserved passthrough for already-clean lines (e.g. `Current version: 2.1.138`)

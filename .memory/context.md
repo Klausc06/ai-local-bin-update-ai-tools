@@ -4,9 +4,9 @@
 - `main` — primary development branch
 
 ## Current State
-- 35 commits on `main`, pushed to origin
-- Working tree clean (only `.cache/` untracked)
-- `make install` done → `update-ai-tools b92f138` in `~/.local/bin/`
+- 36 commits on `main`
+- Working tree: `normalizeSummary` changes pending (runner.go + runner_test.go)
+- `make install` done → `update-ai-tools 8f13ad9` in `~/.local/bin/`
 - Go project at ~/Documents/Projects/ai-local-bin-update-ai-tools
 - Remote: github.com/Klausc06/ai-local-bin-update-ai-tools
 
