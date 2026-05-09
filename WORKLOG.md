@@ -213,10 +213,10 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 21 |
+| Total commits | 22 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 130 |
+| Test functions | 136 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |
@@ -251,3 +251,15 @@ check results:
 - Updated app tests for warning dedup behavior.
 
 Tests: 130 passing, app 88.3%, runner 81.1%, all 7 packages with -race.
+
+### `932b709` — fix: compact noisy update summaries — skip progress lines, normalize \r
+
+- Update commands often print progress/spinner lines before the result.
+  `compactSummary` now detects noisy first lines ("Updating...", "Checking...")
+  and falls back to the last meaningful output line.
+- Carriage returns (`\r`) are normalized to newlines via `normalizeLines` so
+  progress-overwrite output (skills) is parsed correctly.
+- Added `lastSignificantLine`, `normalizeLines` helpers and 8 new runner tests.
+- `skills` npm package installed globally to eliminate `npm warn exec` noise.
+
+Tests: 136 passing, runner 82.3%, all 7 packages with -race.
