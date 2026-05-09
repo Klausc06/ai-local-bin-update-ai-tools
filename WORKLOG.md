@@ -213,8 +213,8 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 32 |
-| Files | 21 source files + CI + scripts |
+| Total commits | 34 |
+| Files | 22 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
 | Test functions | 138 |
 | External dependencies | 0 |
@@ -284,5 +284,13 @@ Tests: 136 passing, runner 82.3%, all 7 packages with -race.
 ### `3429ea2` — chore: remove dead Progressf method
 
 - Replaced by ProgressBar in d554947, no remaining call sites.
+
+### `c9fffb2` — docs: align memory files with shared conventions
+
+- `.memory/*` and `CLAUDE.md` tracked in git for the first time.
+- Reading order codified: mem0 → .memory/* → CLAUDE.md → WORKLOG → git diff.
+- After-change checklist: WORKLOG → context.md → decisions.md → mem0 → push.
+- mem0 metadata rules (author/category), dedup-before-write, three-layer architecture.
+- Aligned with `~/free-claude-code/.memory/conventions.md` cross-agent standards.
 
 Tests: 138 passing, app 88.7%, runner 82.3%, report 91.7%, all 7 packages with -race.
