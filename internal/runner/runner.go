@@ -213,7 +213,7 @@ func looksLikeHealthWarning(s string) bool {
 
 func normalizeSummary(s string) string {
 	// Strip leading emoji and unicode symbols.
-	s = strings.TrimLeft(s, "\U0001F389✓✗⚠⚡\U0001F527\U0001F680\U0001F4A1⭐❗❌✅⚠️")
+	s = strings.TrimLeft(s, "\U0001F389✓✗⚡\U0001F527\U0001F680\U0001F4A1⭐❗❌✅⚠️")
 	s = strings.TrimSpace(s)
 
 	// Strip [bracketed] tool prefixes (e.g. "[omx]").
