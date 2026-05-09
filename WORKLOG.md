@@ -316,3 +316,38 @@ Added `normalizeSummary` in `internal/runner/runner.go`:
 
 Tests: 141 passing (3 new: strips emoji, strips bracketed prefix, passthrough).
 Coverage: runner 82.9%, all 7 packages pass.
+
+---
+
+## Session 10 — Windows CI fix + staticcheck cleanup (Hermes)
+
+### Root cause: Windows test failures
+
+6 CI runs failed on `windows-latest` only (ubuntu/macOS green). Two tests in `internal/app/app_test.go`:
+
+- `TestRunUpdateReturnsErrorWhenTaskFails`
+- `TestRunUpdateForceContinuesAfterPartialBackupWarning`
+
+Root cause: `installFakeNpx` helper created a `#!/bin/sh` script named `npx` (no extension).
+On Windows, `exec.LookPath("npx")` cannot find a file without `.exe`/`.cmd`/`.bat` extension,
+and there is no `/bin/sh` shell to execute it anyway. The skills provider's `SkipIfMissing: "npx"`
+then silently skipped the task instead of letting it fail.
+
+**Fix (commit `7438c77`, by fcc):** Platform-aware `installFakeNpx` using `runtime.GOOS`:
+- Windows: creates `npx.cmd` batch file (`@echo off` + `exit /b N`)
+- Unix: creates `npx` shell script (`#!/bin/sh`)
+- Replaced single-digit exit code hack with `strconv.Itoa`
+
+### `9e03c6c` — ci: add workflow_dispatch trigger
+
+Added `workflow_dispatch` to `.github/workflows/ci.yml` so manual CI runs can be triggered
+without pushing a commit.
+
+### `b71d764` — fix: remove duplicate ⚠ from TrimLeft cutset (SA1024)
+
+`staticcheck@latest` (v0.7.0) flagged `internal/runner/runner.go:216`: the cutset string
+in `normalizeSummary` contained both `⚠` (U+26A0) and `⚠️` (U+26A0+U+FE0F), duplicating
+the base code point. Removed standalone `⚠`, kept `⚠️` (emoji presentation form).
+
+Tests: 141 passing, all 7 packages pass with -race on macOS.
+
