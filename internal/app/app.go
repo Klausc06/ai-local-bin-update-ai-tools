@@ -138,6 +138,7 @@ func Run(args []string) error {
 			}
 		}
 	} else if opts.action == actionUpdate {
+		log.Progressf("Backing up configs...")
 		backupDir, result := backup.Configs(profile, red, log)
 		rep.BackupDir = backupDir
 		rep.Results = append(rep.Results, result)
@@ -158,12 +159,17 @@ func Run(args []string) error {
 				log.Infof("force enabled; continuing after backup warning")
 			}
 			for _, p := range active {
-				for _, task := range p.UpdateTasks() {
+				tasks := p.UpdateTasks()
+				if len(tasks) > 0 {
+					log.Progressf("Updating %s...", p.Name())
+				}
+				for _, task := range tasks {
 					selectedUpdateTasks[task.Name] = true
 					log.Infof("update: %s", task.Name)
 					rep.Results = append(rep.Results, cmdRunner.RunTask(task))
 				}
 			}
+			log.Progressf("Running post-update checks...")
 			for _, p := range active {
 				rep.Results = append(rep.Results, p.PostUpdateChecks()...)
 			}

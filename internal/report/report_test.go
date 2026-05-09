@@ -113,3 +113,17 @@ func TestLoggerDetailfNotVerbose(t *testing.T) {
 		t.Error("verbose=false should not write detail to console")
 	}
 }
+
+func TestLoggerProgressfAlwaysConsole(t *testing.T) {
+	var fileBuf, consoleBuf bytes.Buffer
+	red := redactor.New()
+	// verbose=false: Progressf should STILL write to console
+	log := NewLogger(&fileBuf, &consoleBuf, red, false)
+	log.Progressf("step %d of %d", 1, 3)
+	if !strings.Contains(consoleBuf.String(), "step 1 of 3") {
+		t.Errorf("Progressf should always write to console: %q", consoleBuf.String())
+	}
+	if !strings.Contains(fileBuf.String(), "step 1 of 3") {
+		t.Errorf("Progressf should always write to file: %q", fileBuf.String())
+	}
+}

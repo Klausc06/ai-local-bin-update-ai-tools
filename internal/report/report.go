@@ -90,6 +90,12 @@ func (l *Logger) Detailf(format string, args ...any) {
 	l.write("DETAIL", fmt.Sprintf(format, args...), l.verbose)
 }
 
+func (l *Logger) Progressf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	l.write("INFO", msg, false)
+	fmt.Fprintf(l.console, "  %s\n", msg)
+}
+
 func (l *Logger) write(level, msg string, toConsole bool) {
 	line := l.red.Redact(fmt.Sprintf("%s %s %s\n", time.Now().Format(time.RFC3339), level, msg))
 	if _, err := l.file.Write([]byte(line)); err != nil {
