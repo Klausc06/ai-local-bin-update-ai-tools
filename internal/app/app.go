@@ -405,6 +405,22 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor, verbose b
 	}
 
 	actions, checks, support := splitResults(rep.Results)
+
+	// Dedup: results already shown in Checks or Actions should not repeat in Warnings.
+	shown := map[string]bool{}
+	for _, r := range checks {
+		shown[r.Name] = true
+	}
+	for _, r := range actions {
+		shown[r.Name] = true
+	}
+	var dedupedWarnings []report.TaskResult
+	for _, w := range warningResults(rep.Results) {
+		if !shown[w.Name] {
+			dedupedWarnings = append(dedupedWarnings, w)
+		}
+	}
+
 	if verbose {
 		printResultSection(w, "Checks", checks, red, c)
 	}
@@ -414,7 +430,7 @@ func printHuman(w io.Writer, rep report.Report, red redactor.Redactor, verbose b
 	} else {
 		printRisksSectionBrief(w, rep.Risks, red, c)
 	}
-	printWarningsSection(w, warningResults(rep.Results), red, c)
+	printWarningsSection(w, dedupedWarnings, red, c)
 	if verbose {
 		printResultSection(w, "Details", support, red, c)
 	}

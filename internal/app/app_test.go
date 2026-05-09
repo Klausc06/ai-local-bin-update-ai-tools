@@ -389,12 +389,13 @@ func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
 		Mode:      "update",
 		LogPath:   "/tmp/update.log",
 		BackupDir: "/tmp/backup",
-		Summary:   report.Summary{Success: 3, Warning: 1},
+		Summary:   report.Summary{Success: 3, Warning: 2},
 		Results: []report.TaskResult{
 			{Name: "backup-configs", Provider: "backup", Status: report.StatusSuccess, Summary: "backed up 3 configs"},
 			{Name: "codex-update", Provider: "codex", Status: report.StatusSuccess, Summary: "updated codex"},
 			{Name: "codex-version", Provider: "codex", Status: report.StatusSuccess, Summary: "codex 1.2.3"},
 			{Name: "claude-mcp-list-after", Provider: "claude", Status: report.StatusWarning, Summary: "Checking MCP server health..."},
+			{Name: "mcp-config-scan", Provider: "mcp", Status: report.StatusWarning, Summary: "partial scan warning"},
 		},
 		Risks: []report.Risk{
 			{Provider: "mcp", Name: "spotify", Level: "manual", Reason: "manual review"},
@@ -407,7 +408,12 @@ func TestPrintHumanGroupsUpdateOutput(t *testing.T) {
 			t.Fatalf("expected %q in output:\n%s", want, out)
 		}
 	}
+	// claude-mcp-list-after is classified as a check; must not duplicate in Warnings
+	if strings.Count(out, "claude-mcp-list-after") > 1 {
+		t.Fatal("claude-mcp-list-after should appear only once, not in both Checks and Warnings")
+	}
 }
+
 
 func TestPrintHumanNoAnsiInNonTTY(t *testing.T) {
 	// When writing to a non-TTY (buf), no ANSI escapes should leak.
@@ -890,13 +896,14 @@ func TestPrintHumanNonVerboseHidesChecksDetailsAdvisory(t *testing.T) {
 		Mode:      "update",
 		LogPath:   "/tmp/update.log",
 		BackupDir: "/tmp/backup",
-		Summary:   report.Summary{Success: 4, Warning: 1, Failed: 1},
+		Summary:   report.Summary{Success: 4, Warning: 2, Failed: 1},
 		Results: []report.TaskResult{
 			{Name: "backup-configs", Provider: "backup", Status: report.StatusSuccess, Summary: "backed up 3 configs"},
 			{Name: "codex-update", Provider: "codex", Status: report.StatusSuccess, Summary: "updated codex"},
 			{Name: "codex-version", Provider: "codex", Status: report.StatusSuccess, Summary: "codex 1.2.3"},
 			{Name: "claude-doctor", Provider: "claude", Status: report.StatusSuccess, Summary: "claude healthy"},
 			{Name: "claude-mcp-list-after", Provider: "claude", Status: report.StatusWarning, Summary: "Checking MCP server health..."},
+			{Name: "mcp-config-scan", Provider: "mcp", Status: report.StatusWarning, Summary: "partial scan warning"},
 		},
 		Risks: []report.Risk{
 			{Provider: "mcp", Name: "spotify", Level: "high", Reason: "critical issue", Path: "/tmp/spotify"},

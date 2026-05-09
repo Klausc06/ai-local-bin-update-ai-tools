@@ -99,7 +99,7 @@ func (r *Runner) RunTask(task Task) report.TaskResult {
 		return res
 	}
 	res.Status = report.StatusSuccess
-	res.Summary = firstSignificantLine(res.Output, "ok")
+	res.Summary = compactSummary(res.Output, "ok")
 	r.log.Detailf("%s output: %s", task.Name, res.Output)
 	return res
 }
@@ -118,6 +118,27 @@ func commandError(err error) string {
 		return fmt.Sprintf("exit status %d", exit.ExitCode())
 	}
 	return err.Error()
+}
+
+func compactSummary(output, fallback string) string {
+	first := firstSignificantLine(output, fallback)
+	// Detect raw MCP table header lines (Name ... Status columns) and replace
+	// with a compact server count.
+	if !strings.Contains(first, "Name") || !strings.Contains(first, "Status") {
+		return first
+	}
+	// Count non-empty data rows (skip header).
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	count := 0
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	if count > 0 {
+		return fmt.Sprintf("%d servers", count)
+	}
+	return first
 }
 
 func firstSignificantLine(s, fallback string) string {

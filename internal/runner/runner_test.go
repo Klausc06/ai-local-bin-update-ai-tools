@@ -135,3 +135,40 @@ func TestCapture(t *testing.T) {
 		t.Errorf("expected 'captured', got %q", result.Output)
 	}
 }
+
+func TestCompactSummaryTableHeader(t *testing.T) {
+	// Simulates codex mcp list output with a table header
+	output := "Name            Command                                       Args  Status\nserver1         cmd1                                          args1 enabled\nserver2         cmd2                                          args2 enabled"
+	got := compactSummary(output, "ok")
+	if got == "ok" {
+		t.Fatalf("expected compacted summary, got fallback %q", got)
+	}
+	if !strings.Contains(got, "servers") {
+		t.Errorf("expected server count summary, got %q", got)
+	}
+}
+
+func TestCompactSummaryNormalText(t *testing.T) {
+	// Non-table output should pass through via firstSignificantLine
+	got := compactSummary("codex-cli 0.129.0", "ok")
+	if got != "codex-cli 0.129.0" {
+		t.Errorf("expected pass-through, got %q", got)
+	}
+}
+
+func TestCompactSummaryEmptyOutput(t *testing.T) {
+	got := compactSummary("", "fallback")
+	if got != "fallback" {
+		t.Errorf("expected fallback, got %q", got)
+	}
+}
+
+func TestCompactSummaryTableEmpty(t *testing.T) {
+	// Table header but no data rows
+	output := "Name            Status"
+	got := compactSummary(output, "ok")
+	// Only header, no data rows: should return the header line
+	if got == "ok" {
+		t.Fatalf("expected header line, not fallback")
+	}
+}

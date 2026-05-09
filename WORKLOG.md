@@ -213,10 +213,32 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 18 |
+| Total commits | 20 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 117 |
+| Test functions | 125 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |
+
+---
+
+## Session 8 — Slim default output (2026-05-08)
+
+### `9b022e0` — feat: slim default output — verbose gates INFO console and detail sections
+
+Simplified default human output so the terminal is not cluttered with routine
+check results:
+
+- Default (non-verbose): only the summary bar, Actions, Warnings, actionable
+  Risks, and log/backup paths are displayed.
+- Checks, Details, and Advisory sections are hidden unless `--verbose` is passed.
+- `Logger.Infof` console writes are now gated on the verbose flag; the log file
+  always receives every message regardless of verbosity.
+- Added `printRisksSectionBrief` for non-verbose risk display (actionable risks
+  only, no Advisory group).
+- Added 6 tests: verbose/non-verbose printHuman section gating, empty section
+  suppression, verbose/non-verbose console INFO gating, Logger.Infof verbose
+  honor.
+
+Tests: 125 passing, app 88.0%, report 96.2%, all 7 packages with -race.
