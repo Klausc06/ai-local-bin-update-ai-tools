@@ -213,10 +213,10 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 20 |
+| Total commits | 21 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 125 |
+| Test functions | 130 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |
@@ -241,4 +241,13 @@ check results:
   suppression, verbose/non-verbose console INFO gating, Logger.Infof verbose
   honor.
 
-Tests: 125 passing, app 88.0%, report 96.2%, all 7 packages with -race.
+### `08f901a` — fix: dedup warnings and compact MCP list summaries
+
+- Warnings already shown in Checks or Actions sections are no longer duplicated
+  in the Warnings section.
+- MCP list outputs with table headers (Name...Status columns) are compacted to
+  "N servers" instead of raw column headers.
+- Added `compactSummary` helper in runner with 4 new tests.
+- Updated app tests for warning dedup behavior.
+
+Tests: 130 passing, app 88.3%, runner 81.1%, all 7 packages with -race.
