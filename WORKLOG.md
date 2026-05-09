@@ -213,10 +213,10 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 23 |
+| Total commits | 25 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
-| Test functions | 137 |
+| Test functions | 138 |
 | External dependencies | 0 |
 | CI platforms | ubuntu + macos |
 | Release targets | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64 |
@@ -264,12 +264,17 @@ Tests: 130 passing, app 88.3%, runner 81.1%, all 7 packages with -race.
 
 Tests: 136 passing, runner 82.3%, all 7 packages with -race.
 
-### `11188fc` — feat: add progress output during update mode
+### `d554947` — feat: animated progress bar during update mode
 
-- `Logger.Progressf` always writes to console (bypasses verbose gate) and to file.
-- Update mode prints progress: `Backing up configs...` → `Updating codex...` etc
-  → `Running post-update checks...`, so users see activity instead of a silent wait.
-- Only providers with actual update tasks trigger progress lines.
-- Added `TestLoggerProgressfAlwaysConsole`.
+- Replaced static step list with a filling progress bar that redraws on the same
+  line using `\r`. Format: `[████░░░░░░] N/M Updating codex...`.
+- `Logger.ProgressBar(step, total, label)` + `Logger.ProgressDone()` API.
+- `ProgressDone` flushes the final newline after bar completes.
+- Added `TestLoggerProgressBarAlwaysConsole`, `TestLoggerProgressBarDone`.
 
-Tests: 137 passing, app 88.4%, report 96.6%, all 7 packages with -race.
+### `f084a8f` — fix: ad-hoc codesign after install to prevent macOS kill
+
+- macOS kills unsigned binaries on execution. Added `codesign --force --sign -`
+  to `make install` to ad-hoc sign the installed binary.
+
+Tests: 138 passing, app 88.7%, runner 82.3%, report 91.7%, all 7 packages with -race.
