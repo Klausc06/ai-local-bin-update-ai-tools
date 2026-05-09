@@ -351,3 +351,17 @@ the base code point. Removed standalone `⚠`, kept `⚠️` (emoji presentation
 
 Tests: 141 passing, all 7 packages pass with -race on macOS.
 
+### `a7cf7ad` — docs: update context.md with Hermes review
+
+Updated commit count (40), CI status (all-green), coverage table, and Known Issues section
+(govulncheck missing, Node 20 deprecation).
+
+### `24f070a` — ci: add govulncheck to pipeline
+
+Added `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` step to CI. Runs vulnerability
+scanning against project dependencies on every push/PR. Node 20 action upgrade deferred — no
+newer versions of checkout/setup-go available yet (Node 20 removal: Sept 2026).
+
+Tests: 141 passing, all 7 packages -race clean. CI: 3-platform green.
+
+
