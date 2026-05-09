@@ -101,7 +101,7 @@ func (l *Logger) ProgressBar(step, total int, label string) {
 		filled = barWidth
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	line := fmt.Sprintf("\r  [%s] %d/%d %s", bar, step, total, label)
+	line := fmt.Sprintf("\r  \033[92m[%s] %d/%d %s\033[0m", bar, step, total, label)
 	fmt.Fprint(l.console, line)
 	l.write("INFO", fmt.Sprintf("[%d/%d] %s", step, total, label), false)
 }
