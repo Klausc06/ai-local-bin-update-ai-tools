@@ -90,10 +90,6 @@ func (l *Logger) Detailf(format string, args ...any) {
 	l.write("DETAIL", fmt.Sprintf(format, args...), l.verbose)
 }
 
-func (l *Logger) Progressf(format string, args ...any) {
-	l.write("INFO", fmt.Sprintf(format, args...), false)
-}
-
 func (l *Logger) ProgressBar(step, total int, label string) {
 	barWidth := 20
 	filled := (step * barWidth) / total
