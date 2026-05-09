@@ -213,7 +213,7 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 26 |
+| Total commits | 32 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
 | Test functions | 138 |
@@ -280,5 +280,9 @@ Tests: 136 passing, runner 82.3%, all 7 packages with -race.
 ### `a80f5fa` — feat: light green progress bar color
 
 - Wrapped progress bar line in `\033[92m` (bright green) ANSI code.
+
+### `3429ea2` — chore: remove dead Progressf method
+
+- Replaced by ProgressBar in d554947, no remaining call sites.
 
 Tests: 138 passing, app 88.7%, runner 82.3%, report 91.7%, all 7 packages with -race.
