@@ -213,7 +213,7 @@ Code-review follow-up:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 25 |
+| Total commits | 26 |
 | Files | 21 source files + CI + scripts |
 | Go packages | 7 internal + 1 cmd |
 | Test functions | 138 |
@@ -276,5 +276,9 @@ Tests: 136 passing, runner 82.3%, all 7 packages with -race.
 
 - macOS kills unsigned binaries on execution. Added `codesign --force --sign -`
   to `make install` to ad-hoc sign the installed binary.
+
+### `a80f5fa` — feat: light green progress bar color
+
+- Wrapped progress bar line in `\033[92m` (bright green) ANSI code.
 
 Tests: 138 passing, app 88.7%, runner 82.3%, report 91.7%, all 7 packages with -race.
