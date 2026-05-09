@@ -122,27 +122,74 @@ func commandError(err error) string {
 
 func compactSummary(output, fallback string) string {
 	first := firstSignificantLine(output, fallback)
-	// Detect raw MCP table header lines (Name ... Status columns) and replace
-	// with a compact server count.
-	if !strings.Contains(first, "Name") || !strings.Contains(first, "Status") {
+
+	// MCP table header (Name ... Status columns) → "N servers".
+	if strings.Contains(first, "Name") && strings.Contains(first, "Status") {
+		lines := strings.Split(normalizeLines(output), "\n")
+		count := 0
+		for _, line := range lines[1:] {
+			if strings.TrimSpace(line) != "" {
+				count++
+			}
+		}
+		if count > 0 {
+			return fmt.Sprintf("%d servers", count)
+		}
 		return first
 	}
-	// Count non-empty data rows (skip header).
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	count := 0
-	for _, line := range lines[1:] {
-		if strings.TrimSpace(line) != "" {
-			count++
+
+	// Noisy progress lines → try to find the last meaningful line.
+	if isNoisyFirstLine(first) {
+		if better := lastSignificantLine(output); better != "" {
+			return better
 		}
 	}
-	if count > 0 {
-		return fmt.Sprintf("%d servers", count)
-	}
+
 	return first
 }
 
+func isNoisyFirstLine(s string) bool {
+	noisy := []string{
+		"Updating ", "Checking ", "Installing ", "Downloading ",
+		"Starting ", "Running ", "Fetching ", "Building ",
+	}
+	for _, prefix := range noisy {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func lastSignificantLine(s string) string {
+	lines := strings.Split(normalizeLines(s), "\n")
+	// Walk backwards to find the last meaningful, non-spinner line.
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || strings.HasPrefix(line, "WARNING:") {
+			continue
+		}
+		if looksLikeSpinner(line) {
+			continue
+		}
+		return line
+	}
+	return ""
+}
+
+func looksLikeSpinner(s string) bool {
+	// Spinner frames: ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏ ⠋ or | / - \
+	spinners := []string{"⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋", "|", "/", "-", "\\"}
+	for _, sp := range spinners {
+		if strings.HasPrefix(strings.TrimSpace(s), sp) {
+			return true
+		}
+	}
+	return false
+}
+
 func firstSignificantLine(s, fallback string) string {
-	s = strings.TrimSpace(s)
+	s = normalizeLines(s)
 	if s == "" {
 		return fallback
 	}
@@ -154,6 +201,10 @@ func firstSignificantLine(s, fallback string) string {
 		return line
 	}
 	return fallback
+}
+
+func normalizeLines(s string) string {
+	return strings.ReplaceAll(strings.TrimSpace(s), "\r", "\n")
 }
 
 func looksLikeHealthWarning(s string) bool {

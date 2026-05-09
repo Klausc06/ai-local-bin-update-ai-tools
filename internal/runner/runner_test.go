@@ -172,3 +172,88 @@ func TestCompactSummaryTableEmpty(t *testing.T) {
 		t.Fatalf("expected header line, not fallback")
 	}
 }
+
+func TestCompactSummaryCodexUpdate(t *testing.T) {
+	output := "Updating Codex via `npm install -g @openai/codex`...\n\nupdated"
+	got := compactSummary(output, "fallback")
+	if got != "updated" {
+		t.Errorf("expected 'updated', got %q", got)
+	}
+}
+
+func TestCompactSummarySkillsUpdate(t *testing.T) {
+	output := "Checking for skill updates...\n4 skills are already up to date."
+	got := compactSummary(output, "fallback")
+	if got != "4 skills are already up to date." {
+		t.Errorf("expected skills status, got %q", got)
+	}
+}
+
+func TestCompactSummaryNoisyOnly(t *testing.T) {
+	// Only noisy line, no second line — should keep the noisy line
+	output := "Running something..."
+	got := compactSummary(output, "fallback")
+	if got != "Running something..." {
+		t.Errorf("expected noisy line unchanged when no better line, got %q", got)
+	}
+}
+
+func TestCompactSummarySkipsSpinner(t *testing.T) {
+	output := "Checking for skill updates...\n⠙\n4 skills are already up to date."
+	got := compactSummary(output, "fallback")
+	if got != "4 skills are already up to date." {
+		t.Errorf("expected skills status (skipping spinner), got %q", got)
+	}
+}
+
+func TestIsNoisyFirstLine(t *testing.T) {
+	for _, s := range []string{"Updating Codex", "Checking for updates", "Installing package", "Downloading assets"} {
+		if !isNoisyFirstLine(s) {
+			t.Errorf("%q should be noisy", s)
+		}
+	}
+	if isNoisyFirstLine("codex-cli 0.129.0") {
+		t.Error("version string should not be noisy")
+	}
+	if isNoisyFirstLine("4 skills up to date") {
+		t.Error("status string should not be noisy")
+	}
+}
+
+func TestLooksLikeSpinner(t *testing.T) {
+	for _, s := range []string{"⠙", "⠹", "|", "/", "-", "\\"} {
+		if !looksLikeSpinner(s) {
+			t.Errorf("%q should look like spinner", s)
+		}
+	}
+	if looksLikeSpinner("updated") {
+		t.Error("'updated' should not look like spinner")
+	}
+}
+
+func TestCompactSummaryCarriageReturn(t *testing.T) {
+	// Skills output uses \r for progress, \n for blank lines
+	output := "Checking for skill updates...\n\n\rChecking global skill 1/3: a\rChecking global skill 2/3: b\rChecking global skill 3/3: c\r✓ All global skills are up to date"
+	got := compactSummary(output, "fallback")
+	if got != "✓ All global skills are up to date" {
+		t.Errorf("expected '✓ All global skills are up to date', got %q", got)
+	}
+}
+
+func TestNormalizeLines(t *testing.T) {
+	got := normalizeLines("line1\rline2\nline3")
+	if !strings.Contains(got, "\n") && strings.Contains(got, "\r") {
+		t.Error("expected \\r to be converted to \\n")
+	}
+}
+
+func TestFirstSignificantLineCarriageReturn(t *testing.T) {
+	output := "\rprogress 1\rprogress 2\rresult ok"
+	got := firstSignificantLine(output, "fallback")
+	// After normalization, \r becomes \n, so we get multiple lines.
+	// firstSignificantLine skips leading blank lines (from empty splits).
+	// First non-empty after split: "progress 1"
+	if got != "progress 1" {
+		t.Errorf("expected 'progress 1', got %q", got)
+	}
+}
