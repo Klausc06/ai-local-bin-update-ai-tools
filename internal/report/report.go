@@ -91,9 +91,23 @@ func (l *Logger) Detailf(format string, args ...any) {
 }
 
 func (l *Logger) Progressf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	l.write("INFO", msg, false)
-	fmt.Fprintf(l.console, "  %s\n", msg)
+	l.write("INFO", fmt.Sprintf(format, args...), false)
+}
+
+func (l *Logger) ProgressBar(step, total int, label string) {
+	barWidth := 20
+	filled := (step * barWidth) / total
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+	line := fmt.Sprintf("\r  [%s] %d/%d %s", bar, step, total, label)
+	fmt.Fprint(l.console, line)
+	l.write("INFO", fmt.Sprintf("[%d/%d] %s", step, total, label), false)
+}
+
+func (l *Logger) ProgressDone() {
+	fmt.Fprint(l.console, "\n\n")
 }
 
 func (l *Logger) write(level, msg string, toConsole bool) {

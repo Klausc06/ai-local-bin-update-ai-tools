@@ -114,16 +114,29 @@ func TestLoggerDetailfNotVerbose(t *testing.T) {
 	}
 }
 
-func TestLoggerProgressfAlwaysConsole(t *testing.T) {
+func TestLoggerProgressBarAlwaysConsole(t *testing.T) {
 	var fileBuf, consoleBuf bytes.Buffer
 	red := redactor.New()
-	// verbose=false: Progressf should STILL write to console
+	// verbose=false: ProgressBar should STILL write to console
 	log := NewLogger(&fileBuf, &consoleBuf, red, false)
-	log.Progressf("step %d of %d", 1, 3)
-	if !strings.Contains(consoleBuf.String(), "step 1 of 3") {
-		t.Errorf("Progressf should always write to console: %q", consoleBuf.String())
+	log.ProgressBar(2, 6, "Updating codex...")
+	if !strings.Contains(consoleBuf.String(), "Updating codex") {
+		t.Errorf("ProgressBar should always write to console: %q", consoleBuf.String())
 	}
-	if !strings.Contains(fileBuf.String(), "step 1 of 3") {
-		t.Errorf("Progressf should always write to file: %q", fileBuf.String())
+	if !strings.Contains(consoleBuf.String(), "[") {
+		t.Errorf("ProgressBar should draw a bar: %q", consoleBuf.String())
+	}
+	if !strings.Contains(fileBuf.String(), "Updating codex") {
+		t.Errorf("ProgressBar should always write to file: %q", fileBuf.String())
+	}
+}
+
+func TestLoggerProgressBarDone(t *testing.T) {
+	var fileBuf, consoleBuf bytes.Buffer
+	red := redactor.New()
+	log := NewLogger(&fileBuf, &consoleBuf, red, false)
+	log.ProgressDone()
+	if !strings.Contains(consoleBuf.String(), "\n") {
+		t.Error("ProgressDone should flush a newline to console")
 	}
 }

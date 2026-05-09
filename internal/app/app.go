@@ -138,7 +138,18 @@ func Run(args []string) error {
 			}
 		}
 	} else if opts.action == actionUpdate {
-		log.Progressf("Backing up configs...")
+		// Count total progress steps: backup + each provider with tasks + post-update.
+		totalSteps := 1
+		for _, p := range active {
+			if len(p.UpdateTasks()) > 0 {
+				totalSteps++
+			}
+		}
+		totalSteps++ // post-update checks
+		step := 0
+
+		step++
+		log.ProgressBar(step, totalSteps, "Backing up configs...")
 		backupDir, result := backup.Configs(profile, red, log)
 		rep.BackupDir = backupDir
 		rep.Results = append(rep.Results, result)
@@ -153,6 +164,7 @@ func Run(args []string) error {
 				Status:   report.StatusSkipped,
 				Summary:  msg,
 			})
+			log.ProgressDone()
 			runErr = fmt.Errorf("backup did not complete cleanly; updates skipped")
 		} else {
 			if result.Status != report.StatusSuccess && opts.force {
@@ -161,7 +173,8 @@ func Run(args []string) error {
 			for _, p := range active {
 				tasks := p.UpdateTasks()
 				if len(tasks) > 0 {
-					log.Progressf("Updating %s...", p.Name())
+					step++
+					log.ProgressBar(step, totalSteps, "Updating "+p.Name()+"...")
 				}
 				for _, task := range tasks {
 					selectedUpdateTasks[task.Name] = true
@@ -169,10 +182,12 @@ func Run(args []string) error {
 					rep.Results = append(rep.Results, cmdRunner.RunTask(task))
 				}
 			}
-			log.Progressf("Running post-update checks...")
+			step++
+			log.ProgressBar(step, totalSteps, "Running post-update checks...")
 			for _, p := range active {
 				rep.Results = append(rep.Results, p.PostUpdateChecks()...)
 			}
+			log.ProgressDone()
 		}
 	}
 
