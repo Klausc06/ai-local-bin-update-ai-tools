@@ -1,5 +1,12 @@
 # ai-local-bin-update-ai-tools — Decisions Log
 
+## 2026-05-10: Local backup layout and canonical path
+- Canonical repo is `/Users/klaus/Documents/Projects/ai-local-bin-update-ai-tools`.
+- Local backups use `/Users/klaus/Documents/Projects/repo-backups/ai-local-bin-update-ai-tools/<timestamp>` as full repo snapshots.
+- Old scattered archived repos from `/Users/klaus/Documents/Codex/_archived/` were moved into that backup tree.
+- Installed entrypoint in `~/.local/bin/update-ai-tools` should be rebuilt from the canonical repo with `make install` when project state changes.
+- Do not leave loose old clones after archiving; keep the active project plus timestamped backups only.
+
 ## 2026-05-07: Platform adapter completion
 - Completed Linux (XDG autostart, systemd) and Windows (startup folder) adapters
 - Fixed ConfigFiles initialization order bug

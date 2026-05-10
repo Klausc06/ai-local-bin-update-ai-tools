@@ -196,7 +196,7 @@ Regression tests added/updated:
 
 Verification:
 ```text
-GOCACHE=/Users/klaus/Documents/Projects/ai-local-bin-update-ai-tools/.cache/go-build go test ./...
+GOCACHE=/Users/klaus/Documents/Projects/ai-local-bin-update-ai-tools/.gocache go test ./...
 ```
 
 Result: all packages passed. The first test run without local `GOCACHE` was blocked by sandbox access to `/Users/klaus/Library/Caches/go-build`, so verification used a repo-local Go build cache.
@@ -364,4 +364,25 @@ newer versions of checkout/setup-go available yet (Node 20 removal: Sept 2026).
 
 Tests: 141 passing, all 7 packages -race clean. CI: 3-platform green.
 
+---
 
+## Session 11 — Local repository consolidation (Codex)
+
+Scope: organize local project layout and keep cross-agent memory consistent.
+
+- Canonical repo confirmed: `/Users/klaus/Documents/Projects/ai-local-bin-update-ai-tools`.
+- Remote confirmed: `https://github.com/Klausc06/ai-local-bin-update-ai-tools.git`.
+- Installed binary refreshed from canonical HEAD with `make install`.
+- Installed entrypoint verified: `/Users/klaus/.local/bin/update-ai-tools --version` -> `update-ai-tools 750b7f7`.
+- Removed generated loose artifacts from the canonical repo root: `.cache/` and `update-ai-tools`.
+- Updated agent guidance to use `.gocache` as the repo-local Go build cache path.
+- Moved old scattered archived repos from `/Users/klaus/Documents/Codex/_archived/` into timestamped local backup folders:
+  - `/Users/klaus/Documents/Projects/repo-backups/ai-local-bin-update-ai-tools/20260508-135548-initial` (HEAD `fa76b22`)
+  - `/Users/klaus/Documents/Projects/repo-backups/ai-local-bin-update-ai-tools/20260508-135548-v2` (HEAD `7b07135`)
+  - `/Users/klaus/Documents/Projects/repo-backups/ai-local-bin-update-ai-tools/20260508-135548-backup` (HEAD `fa76b22`)
+- Backup layout now matches the shared convention: `/Users/klaus/Documents/Projects/repo-backups/<project>/<timestamp>`.
+
+Verification:
+- `git status --short --branch` clean on canonical repo before memory updates.
+- `/Users/klaus/.local/bin/update-ai-tools --version` returned `update-ai-tools 750b7f7`.
+- No `ai-local-bin-update-ai-tools*` directories remain directly under `/Users/klaus/Documents/Codex/_archived/`.

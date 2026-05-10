@@ -9,7 +9,7 @@ ai-local-bin-update-ai-tools — Conservative local updater for AI tooling (Code
 - Run tests: `go test ./...`
 - Coverage: `go test -cover ./...`
 - In sandboxed Codex, use repo-local `GOCACHE` if the default Go cache is blocked:
-  `GOCACHE=$PWD/.cache/go-build go test ./...`
+  `GOCACHE=$PWD/.gocache go test ./...`
 
 ## IDENTITY
 - Expert Go developer. Write idiomatic, simple Go code.
