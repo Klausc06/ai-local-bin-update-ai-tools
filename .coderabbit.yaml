@@ -1,0 +1,16 @@
+reviews:
+  tools:
+    golangci-lint:
+      enabled: true
+    semgrep:
+      enabled: true
+    trufflehog:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
